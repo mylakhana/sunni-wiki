@@ -81,3 +81,31 @@ src/
 - Use dependency injection
 - Separate concerns (routes → services → database)
 - Type everything properly
+
+---
+
+## Public library API (v1, read-only)
+
+All routes are `GET`, under `/v1`, and only expose books with `published = true` (404 otherwise).
+
+| Route | Notes |
+|---|---|
+| `/health` | liveness + DB check |
+| `/categories` | all categories by `sort`, `bookCount` (published only) |
+| `/authors`, `/authors/:slug` | list is paginated; detail includes `books` |
+| `/books?authorSlug&categorySlug` | paginated, newest first (`createdAt desc, id desc`) |
+| `/books/:slug` | book + `volumes` (with `chapterCount` and `topLevelCount`) |
+| `/books/:slug/chapters?volume&parentId` | TOC without text; top-level chapters unless `parentId`; max limit 500 |
+| `/books/:slug/chapters/:chapterSlug` | titles, volume, breadcrumb, prev/next, `tei` |
+
+Files: `routes/v1/{categories,authors,books}.ts`, services `library.service.ts` / `chapter.service.ts` / `pagination.ts`, schemas `common.ts` / `library.ts`.
+
+### Conventions
+- Lists: `{ data: T[], nextCursor: string | null }`; query `limit` (default 100, max 200) and opaque id-based `cursor`. Single: `{ data: T }`. Dates are ISO strings.
+- Errors: `{ statusCode, error, message }`; Zod validation -> 400 with `details: [{path, message}]`; Prisma `P2025` -> 404; 5xx messages are hidden. `@fastify/sensible` provides `app.httpErrors`.
+- Plugins (in `app.ts`): HTTP cache hook (`middleware/http-cache.ts`), sensible, helmet, CORS limited to `WEB_ORIGIN` (default `http://localhost:3000`), rate-limit (`RATE_LIMIT_MAX` per minute, default 600), compress (gzip/br, threshold 1 KB).
+- HTTP caching: routes declare `config: { cache: CACHE.list | CACHE.detail | CACHE.chapter }`; the hook adds `Cache-Control: public, max-age, s-maxage, stale-while-revalidate`, a weak ETag and answers `If-None-Match` with 304. Lists/details 300 s, chapter text 3600 s.
+- prev/next of a chapter: reading order of the book = volumes by `sort` (volume-less last), depth-first walk of the chapter tree (siblings by `sort, id`), keeping only chapters that have content; cached in memory per book for 5 min. A chapter without content has `prev`/`next` null.
+- Queries use Prisma `select` only; indexes: `books(published, createdAt)`, `categories(sort)`, `chapters(bookId, volumeId, parentId, sort)`.
+- Tests: `pnpm test` (`test/smoke.ts`, Fastify `app.inject` against the real DB).
+- `scripts/seed_fatawa_razawiyyah.py` sets `published=1` but its clean step deletes imported chapters; re-run `import_fatawa.py` after it.

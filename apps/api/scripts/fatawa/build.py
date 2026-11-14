@@ -56,13 +56,16 @@ def build_toc(index_rows: list[dict], report: dict) -> list[dict]:
         no = r["IndexNo"].strip()
         if not no:
             continue
+        if not re.fullmatch(r"\d+(\.\d+)*", no):  # data defect (e.g. vol 27 has a row numbered "ز")
+            report.setdefault("bad_index_no", []).append(f'{no!r}: {clean_title(r["IndexText"])[:40]}')
+            continue
+        if "." not in no:  # the TOC's own title ("فہرست مضامین مفصل", spelled "فہر ست" in vol 11)
+            continue
         if no in seen:
             report["duplicate_index_no"].append(no)
             continue
         seen.add(no)
         title = clean_title(r["IndexText"])
-        if "." not in no and "فہرست" in title:
-            continue  # the TOC's own title ("فہرست مضامین مفصل")
         nodes.append({"no": no, "title": title})
     nodes.sort(key=lambda n: idx_key(n["no"]))
     by_no = {n["no"]: n for n in nodes}
@@ -99,52 +102,83 @@ def find_candidates(rows: list[dict]) -> list[int]:
     return out
 
 
-def place_leaves(leaves: list[dict], rows: list[dict], cands: list[int], idx_page: dict) -> dict:
-    """leaf no -> start row index (only for leaves we could place)."""
+_GROUP_TITLE = re.compile(r"^(کتاب|باب)\b")  # "کتاب الطہارۃ", "باب الوضوء" (not "بابت …", "کتابت …")
+
+
+_BOOKLET_TITLE = re.compile(r"^رسال[ہۃة]\b")  # "رسالہ تجلی الیقین …"
+
+
+def is_booklet_title(node: dict) -> bool:
+    return bool(_BOOKLET_TITLE.match(tei.strip_marks(node["title"]).strip()))
+
+
+def is_group(node: dict) -> bool:
+    """A "کتاب …" / "باب …" entry that has children: a heading above chapters, no content of its own."""
+    return bool(node["children"]) and bool(_GROUP_TITLE.match(tei.strip_marks(node["title"]).strip()))
+
+
+def place_chapters(chapters: list[dict], rows: list[dict], cands: list[int], idx_page: dict) -> dict:
+    """chapter no -> start row. Reading (page) order; start = first start-candidate on the
+    chapter's page after the cursor, else the page's first row if no chapter began on that page yet."""
     placed, cursor = {}, -1
-    for lf in leaves:
-        page = idx_page.get(lf["no"])
+    first_row_of_page: dict[int, int] = {}
+    for i, r in enumerate(rows):
+        first_row_of_page.setdefault(r["page"], i)
+    for ch in chapters:
+        page = idx_page.get(ch["no"])
         if page is None:
             continue
-        for c in cands:
-            if c > cursor and rows[c]["page"] == page:
-                placed[lf["no"]] = c
-                cursor = c
-                break
+        row = next((c for c in cands if c > cursor and rows[c]["page"] == page), None)
+        if row is None:
+            fr = first_row_of_page.get(page)
+            if fr is not None and fr > cursor:
+                row = fr
+        if row is not None:
+            placed[ch["no"]] = row
+            cursor = row
     return placed
 
 
 # ── TEI assembly ─────────────────────────────────────────────────────────────
 def unit_tei(rows: list[dict], lo: int, hi: int, title: str | None, kind: str, n: str | None,
              page_book: dict, state: dict, anchors: dict) -> str:
+    """One chapter's TEI. Each question ("مسئلہ N") / answer ("الجواب") becomes an <ab>."""
     parts: list[str] = []
-    qs = as_ = None
+    open_ab = None  # "question" | "answer" | None
+
+    def close():
+        nonlocal open_ab
+        if open_ab:
+            parts.append("</ab>")
+            open_ab = None
+
     for i in range(lo, hi):
         r = rows[i]
-        if qs is None and tei.is_masala_start(r["code"], r["text"]):
-            qs = len(parts)
-        if qs is not None and as_ is None and r["code"] in ("u", "uc") and tei.is_answer_start(r["text"]):
-            as_ = len(parts)
-        pb = ""
+        code, text = r["code"], r["text"]
+        if code in ("h", "hc"):
+            close()
+        elif tei.is_masala_start(code, text):
+            close()
+            parts.append('<ab type="question">')
+            open_ab = "question"
+        elif open_ab == "question" and code in ("u", "uc") and tei.is_answer_start(text):
+            close()
+            parts.append('<ab type="answer">')
+            open_ab = "answer"
+        parts.extend(anchors.get(i, []))
         if r["page"] != state.get("page"):
             state["page"] = r["page"]
             bp = page_book.get(r["page"])
             if bp is None and r["page"]:
                 state["unmapped_pages"].add(r["page"])
-            pb = f'<pb n="{tei.esc(bp or "")}" ana="digital-{r["page"]}"/>' if r["page"] else ""
-        els = tei.row_to_tei(r["code"], r["text"])
+            if r["page"]:
+                parts.append(f'<pb n="{tei.esc(bp or "")}" ana="digital-{r["page"]}"/>')
+        parts.extend(tei.row_to_tei(code, text))
         state["emitted"] += 1
-        if pb:
-            els = [pb] + els
-        els = anchors.get(i, []) + els
-        parts.extend(els)
-    # question/answer wrapping on top-level elements (pb markers stay inside)
-    body = parts
-    if qs is not None and as_ is not None:
-        body = parts[:qs] + ['<ab type="question">'] + parts[qs:as_] + ["</ab>", '<ab type="answer">'] + parts[as_:] + ["</ab>"]
+    close()
     nattr = f' n="{tei.esc(n)}"' if n else ""
     t = f"<head>{tei.esc(title)}</head>" if title else ""
-    return f'<div type="{kind}"{nattr}>{t}{"".join(body)}</div>'
+    return f'<div type="{kind}"{nattr}>{t}{"".join(parts)}</div>'
 
 
 def build_volume(slug: str, folder: Path, report: dict) -> list[dict]:
@@ -177,77 +211,129 @@ def build_volume(slug: str, folder: Path, report: dict) -> list[dict]:
     rep["rows"] = len(rows)
     rep["pages_not_in_map"] = sorted({r["page"] for r in rows if r["page"] and r["page"] not in page_book})
 
-    leaves = [n for n in toc if not n["children"]]
-    cands = find_candidates(rows)
-    # TOC order is not always page order (e.g. vol 23) -> place in reading (page) order.
-    by_page = lambda n: (idx_page.get(n["no"], 10**9), idx_key(n["no"]))
-    placed = place_leaves(sorted(leaves, key=by_page), rows, cands, idx_page)
-    rep.update(toc_nodes=len(toc), leaves=len(leaves), placed=len(placed),
-               unplaced=[n["no"] for n in leaves if n["no"] not in placed][:50],
-               unplaced_count=len(leaves) - len(placed), candidates=len(cands))
-
-    # Keep placed leaves + their ancestors as chapters. Every other TOC node
-    # becomes an invisible <index> anchor at its page (title is preserved, no empty chapters).
+    # ── levels: 0 group (heading above booklets/chapters, no text) / 1 booklet (رسالہ) / 2 chapter / 3 sub-topic.
+    #  * booklet: the outermost "رسالہ …" entry (booklets nested inside a booklet are just chapters of it);
+    #  * group:   a کتاب/باب entry at the top of the tree, or any heading that contains a booklet;
+    #  * chapter: a direct child of a booklet, or a non-group entry outside any booklet;
+    #  * everything deeper is a sub-topic (anchor) inside its chapter/booklet.
     by_no = {n["no"]: n for n in toc}
-    keep = set(placed)
-    for no in list(placed):
-        p = by_no[no]["parent"]
-        while p and p not in keep:
-            keep.add(p)
-            p = by_no[p]["parent"]
+
+    def ancestors(n):
+        p = by_no.get(n["parent"]) if n["parent"] else None
+        while p:
+            yield p
+            p = by_no.get(p["parent"]) if p["parent"] else None
+
+    for n in toc:  # parents precede children
+        n["in_booklet"] = any(a_.get("booklet") for a_ in ancestors(n))
+        n["booklet"] = is_booklet_title(n) and not n["in_booklet"]
+    has_booklet_below = set()
+    for n in toc:
+        if n["booklet"]:
+            has_booklet_below.update(a_["no"] for a_ in ancestors(n))
+    for n in toc:
+        p = by_no.get(n["parent"]) if n["parent"] else None
+        if n["booklet"]:
+            n["level"] = 1
+        elif n["in_booklet"]:
+            n["level"] = 2 if p["booklet"] else 3
+        elif p is None or p["level"] == 0:
+            n["level"] = 0 if (n["no"] in has_booklet_below or is_group(n)) else 2
+        else:
+            n["level"] = 3
+    by_page = lambda n: (idx_page.get(n["no"], 10**9), idx_key(n["no"]))
+    chapters_in = sorted((n for n in toc if n["level"] in (1, 2)), key=by_page)
+    cands = find_candidates(rows)
+    placed = place_chapters(chapters_in, rows, cands, idx_page)
+    for n in chapters_in:  # a chapter we cannot locate is demoted to a sub-topic of the previous chapter
+        if n["no"] not in placed:
+            n["level"] = 3
+            n["demoted"] = True
+    rep["toc_nodes"] = len(toc)
+    rep["books"] = rep["groups"] = sum(n["level"] == 0 for n in toc)
+    rep["booklets"] = sum(n["level"] == 1 for n in toc)
+    rep["chapters"] = sum(n["level"] == 2 for n in toc)
+    rep["demoted_chapters"] = [n["no"] for n in toc if n.get("demoted")][:50]
+    rep["demoted_count"] = sum(bool(n.get("demoted")) for n in toc)
+    rep["subtopics"] = sum(n["level"] == 3 for n in toc)
+    rep["candidates"] = len(cands)
+
+    starts = sorted(set(placed.values()))
+    start_chapter = {row: no for no, row in placed.items()}
+    ends = dict(zip(starts, starts[1:] + [len(rows)]))
+    first = starts[0] if starts else len(rows)
+
+    # ── sub-topic anchors: exact start-candidate row when possible, else first row of its page,
+    #    always inside the chapter whose row range contains it
+    def chapter_of_row(row: int) -> str | None:
+        lo = None
+        for st in starts:
+            if st <= row:
+                lo = st
+            else:
+                break
+        return start_chapter[lo] if lo is not None else None
+
     anchors: dict[int, list[str]] = {}
-    last_start, no_page = -1, 0
-    for n in sorted(toc, key=by_page):  # reading order
-        if n["no"] in placed:
-            last_start = placed[n["no"]]
-        if n["no"] in keep:
-            continue
+    sub_row: dict[str, int] = {}
+    cursor = 0
+    exact = page_level = no_page = 0
+    for n in sorted((n for n in toc if n["level"] == 3), key=by_page):
         pg = idx_page.get(n["no"])
-        row = next((i for i in range(last_start + 1 if last_start >= 0 else 0, len(rows)) if rows[i]["page"] == pg), None) if pg else None
-        if row is None and pg:  # page numbers reset inside this volume: first row on that page
-            row = next((i for i in range(len(rows)) if rows[i]["page"] == pg), None)
+        row, how = None, ""
+        if pg:
+            row = next((c for c in cands if c >= cursor and rows[c]["page"] == pg and c not in start_chapter), None)
+            how = "exact"
+            if row is None:
+                row = next((i for i in range(cursor, len(rows)) if rows[i]["page"] == pg), None)
+                how = "page"
+            if row is None:  # page numbers reset in this volume
+                row = next((i for i, r in enumerate(rows) if r["page"] == pg), None)
+                how = "page"
         if row is None:
             no_page += 1
             continue
-        anchors.setdefault(row, []).append(
-            f'<index indexName="toc" n="{tei.esc(n["no"])}"><term>{tei.esc(n["title"])}</term></index>')
-    rep["toc_anchors"] = sum(len(v) for v in anchors.values())
-    rep["toc_dropped_no_page"] = no_page
+        cursor = max(cursor, row) if how == "exact" or row >= cursor else cursor
+        exact += how == "exact"
+        page_level += how == "page"
+        sub_row[n["no"]] = row
+        anchors.setdefault(row, []).append(f'<anchor xml:id="s-{tei.esc(n["no"])}"/>')
+    rep.update(subtopic_anchor_exact=exact, subtopic_anchor_page=page_level, subtopic_no_page=no_page)
 
-    starts = sorted(placed.values())
+    # ── output (groups/chapters first, in TOC order; then sub-topics)
     state = {"emitted": 0, "page": None, "unmapped_pages": set()}
-    chapters: list[dict] = []
+    out: list[dict] = []
     sibling_sort: Counter = Counter()
 
-    def add(key, parent, title, tei_xml):
-        s = sibling_sort[parent]
-        sibling_sort[parent] += 1
-        chapters.append({"key": key, "parent": parent, "sort": s, "slug": f"{slug}-{key}",
-                         "titleUr": title, "tei": tei_xml})
+    def add(key, parent, title, level, xml=None, anchor=None, title_en=None):
+        k = (parent, level == 3)
+        out.append({"key": key, "parent": parent, "sort": sibling_sort[k], "slug": f"{slug}-{key}",
+                    "titleUr": title, "titleEn": title_en, "level": level, "anchorId": anchor, "tei": xml})
+        sibling_sort[k] += 1
 
-    first = starts[0] if starts else len(rows)
     if first > 0 or not starts:
-        add("front", None, None, unit_tei(rows, 0, first, None, "front", None, page_book, state, anchors))
-        chapters[-1]["titleEn"] = "Front matter"
-    end_of = dict(zip(starts, starts[1:] + [len(rows)]))
+        add("front", None, None, 2, unit_tei(rows, 0, first, None, "front", None, page_book, state, anchors), title_en="Front matter")
     for n in toc:
-        if n["no"] not in keep:
+        if n["level"] == 3:
             continue
-        lo = placed.get(n["no"])
+        parent = next((a_["no"] for a_ in ancestors(n) if a_["level"] in (0, 1)), None)  # nearest kept group / booklet
         xml = None
-        if lo is not None:
-            xml = unit_tei(rows, lo, end_of[lo], n["title"], "fatwa", n["no"], page_book, state, anchors)
-        parent = n["parent"]
-        while parent and parent not in keep:
-            parent = by_no[parent]["parent"]
-        add(n["no"], parent, n["title"], xml)
+        if n["level"] in (1, 2):
+            lo = placed[n["no"]]
+            xml = unit_tei(rows, lo, ends[lo], n["title"], "booklet" if n["level"] == 1 else "chapter", n["no"], page_book, state, anchors)
+        add(n["no"], parent, n["title"], n["level"], xml)
+    for n in sorted((n for n in toc if n["level"] == 3), key=lambda n: idx_key(n["no"])):
+        row = sub_row.get(n["no"])
+        ch = chapter_of_row(row) if row is not None else None
+        if ch is None:  # before the first unit -> front matter, or no page at all
+            ch = "front" if (row is not None and first > 0) else (next(iter(placed), None))
+        add(n["no"], ch, n["title"], 3, anchor=f's-{n["no"]}' if row is not None else None)
     rep["rows_emitted"] = state["emitted"]
     rep["rows_parity_ok"] = state["emitted"] == len(rows)
     rep["pages_not_in_map_emitted"] = sorted(state["unmapped_pages"])
 
-    # well-formedness
     bad = []
-    for c in chapters:
+    for c in out:
         if c["tei"]:
             try:
                 ET.fromstring(f'<r xmlns="http://www.tei-c.org/ns/1.0">{c["tei"]}</r>')
@@ -256,7 +342,7 @@ def build_volume(slug: str, folder: Path, report: dict) -> list[dict]:
     rep["xml_errors"] = bad[:20]
     rep["xml_error_count"] = len(bad)
     rep["remaps"] = dict(rep["remaps"])
-    return chapters
+    return out
 
 
 def main() -> None:
@@ -275,7 +361,8 @@ def main() -> None:
         chapters = build_volume(slug, folders[slug], report)
         r = report["volumes"][slug]
         print(f'{slug:>3}: rows {r["rows"]:>5} parity={r["rows_parity_ok"]} toc {r["toc_nodes"]:>4} '
-              f'leaves {r["leaves"]:>4} placed {r["placed"]:>4} anchors {r["toc_anchors"]:>4} xml_err {r["xml_error_count"]}')
+              f'groups {r["groups"]:>3} booklets {r["booklets"]:>3} chapters {r["chapters"]:>4} (demoted {r["demoted_count"]:>4}) subtopics {r["subtopics"]:>5} '
+              f'exact {r["subtopic_anchor_exact"]:>4} xml_err {r["xml_error_count"]}')
         if not a.dry_run:
             d = OUT_DIR / slug
             d.mkdir(parents=True, exist_ok=True)

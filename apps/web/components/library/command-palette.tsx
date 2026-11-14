@@ -2,11 +2,46 @@
 
 import { useRouter } from "next/navigation"
 import { useEffect, useId, useMemo, useRef, useState } from "react"
-import { AUTHORS, BOOKS, authorOf, initials } from "@/lib/data"
+import { loadSearchIndex } from "@/lib/actions"
+import type { SearchIndex } from "@/lib/types"
+import { authorColor, initials } from "@/lib/ui"
 
 type Item = { key: string; href: string; kind: "author" | "book"; title: string; sub?: string; color?: string; hue?: [string, string] }
 
+let cached: SearchIndex | null = null
+
+/** Loads the (server-cached) index when first opened, then filters it locally. */
 export function CommandPalette({ onClose }: { onClose: () => void }) {
+  const [index, setIndex] = useState<SearchIndex | null>(cached)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    if (cached) return
+    let live = true
+    loadSearchIndex()
+      .then((i) => { cached = i; if (live) setIndex(i) })
+      .catch(() => live && setFailed(true))
+    return () => { live = false }
+  }, [])
+  if (!index) {
+    return (
+      <PaletteShell onClose={onClose}>
+        <p className="c-muted px-3 py-6 text-center text-sm" role="status">{failed ? "Search is unavailable right now." : "Loading…"}</p>
+      </PaletteShell>
+    )
+  }
+  return <PaletteInner onClose={onClose} index={index} />
+}
+
+function PaletteShell({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50" onKeyDown={(e) => e.key === "Escape" && onClose()}>
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
+      <div role="dialog" aria-modal="true" aria-label="Search books and writers" className="card relative mx-auto mt-16 w-[92%] max-w-xl overflow-hidden sm:mt-24">{children}</div>
+    </div>
+  )
+}
+
+function PaletteInner({ onClose, index }: { onClose: () => void; index: SearchIndex }) {
   const router = useRouter()
   const uid = useId()
   const [q, setQ] = useState("")
@@ -18,17 +53,17 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const term = q.trim().toLowerCase()
   const items = useMemo<Item[]>(() => {
     const authors: Item[] = term
-      ? AUTHORS.filter((a) => [a.name, a.ar, a.ur].join(" ").toLowerCase().includes(term)).map((a) => ({
-          key: `a-${a.id}`, href: `/authors/${a.id}`, kind: "author", title: a.name, color: a.color,
+      ? index.authors.filter((a) => [a.name, a.ar, a.ur].join(" ").toLowerCase().includes(term)).map((a) => ({
+          key: `a-${a.id}`, href: `/authors/${a.id}`, kind: "author", title: a.name, color: authorColor(a.id),
         }))
       : []
-    const books: Item[] = BOOKS.filter(
-      (b) => !term || [b.title, b.ar, b.ur, authorOf(b).name].join(" ").toLowerCase().includes(term),
+    const books: Item[] = index.books.filter(
+      (b) => !term || [b.title, b.ar, b.ur, b.authorName].join(" ").toLowerCase().includes(term),
     )
       .slice(0, 8)
-      .map((b) => ({ key: `b-${b.id}`, href: `/books/${b.id}`, kind: "book", title: b.title, sub: authorOf(b).name, hue: b.hue }))
+      .map((b) => ({ key: `b-${b.id}`, href: `/books/${b.id}`, kind: "book", title: b.title, sub: b.authorName, hue: b.hue }))
     return [...authors, ...books]
-  }, [term])
+  }, [term, index])
 
   const idx = Math.min(active, Math.max(items.length - 1, 0))
 

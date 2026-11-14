@@ -35,6 +35,7 @@ model Category {
   sort   Int    @default(0)
   books  Book[]
 
+  @@index([sort])
   @@map("categories")
 }
 
@@ -77,6 +78,7 @@ model Book {
 
   @@index([authorId])
   @@index([categoryId])
+  @@index([published, createdAt])
   @@map("books")
 }
 
@@ -104,6 +106,13 @@ model Chapter {
   volumeId Int? // null for volume-less books
   parentId Int? // optional nesting (part → chapter → section); null = top level
   sort     Int  @default(0) // order within its siblings (same book/volume/parent)
+  // 0 = group above booklets/chapters (e.g. "Kitab al-Taharah"; no content of its own)
+  // 1 = booklet (a "Risala"; owns TEI: its title page / intro, its chapters hold the rest)
+  // 2 = chapter (owns the TEI content)
+  // 3 = sub-topic inside a booklet/chapter (no content; jump target inside the parent's TEI)
+  level    Int  @default(2)
+  // Sub-topics only: xml:id of the <anchor/> inside the parent chapter's TEI, e.g. "s-1.001.010"
+  anchorId String? @db.VarChar(150)
   slug     String @db.VarChar(150) // unique within the book: /books/[book]/[chapter]
   titleEn  String? @db.VarChar(500)
   titleAr  String? @db.VarChar(500)

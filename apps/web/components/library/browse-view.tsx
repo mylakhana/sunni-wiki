@@ -2,11 +2,11 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useMemo, useState } from "react"
-import { AUTHORS, BOOKS, CATEGORIES } from "@/lib/data"
+import type { Author, Book, Category } from "@/lib/types"
+import { langName } from "@/lib/ui"
 import { BookGrid } from "./book-card"
 
 const select = "card h-11 rounded-xl px-4 text-sm outline-none"
-const LANGS = ["Arabic", "Urdu", "English"]
 const SORTS = [
   { id: "new", label: "Newest first" },
   { id: "old", label: "Oldest first" },
@@ -31,7 +31,7 @@ export function BrowseSkeleton() {
   )
 }
 
-export function BrowseView() {
+export function BrowseView({ books, authors, categories }: { books: Book[]; authors: Author[]; categories: Category[] }) {
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
@@ -56,14 +56,16 @@ export function BrowseView() {
     else router.push(url, { scroll: false })
   }
 
+  const langs = useMemo(() => [...new Set(books.flatMap((b) => b.langs))].sort(), [books])
+
   const list = useMemo(() => {
     const needle = urlQ.trim().toLowerCase()
-    const out = BOOKS.filter(
+    const out = books.filter(
       (b) =>
         (!cat || b.cat === cat) &&
         (!author || b.author === author) &&
         (!lang || b.langs.includes(lang)) &&
-        (!needle || [b.title, b.ar, b.ur, b.blurb].some((s) => s.toLowerCase().includes(needle))),
+        (!needle || [b.title, b.ar, b.ur, b.blurb, b.authorName].some((s) => s?.toLowerCase().includes(needle))),
     )
     return out.sort((a, b) => {
       switch (sort) {
@@ -74,19 +76,19 @@ export function BrowseView() {
         default: return b.added.localeCompare(a.added)
       }
     })
-  }, [cat, author, lang, sort, urlQ])
+  }, [books, cat, author, lang, sort, urlQ])
 
   const active = [
-    cat && { k: "category", label: CATEGORIES.find((c) => c.id === cat)?.en ?? cat },
-    author && { k: "author", label: AUTHORS.find((a) => a.id === author)?.name ?? author },
-    lang && { k: "lang", label: lang },
+    cat && { k: "category", label: categories.find((c) => c.id === cat)?.en ?? cat },
+    author && { k: "author", label: authors.find((a) => a.id === author)?.name ?? author },
+    lang && { k: "lang", label: langName(lang) },
     urlQ && { k: "q", label: `"${urlQ}"` },
   ].filter((x): x is { k: string; label: string } => !!x)
 
   return (
     <>
       <div className="hide-scroll mt-8 flex gap-2 overflow-x-auto pb-1">
-        {[{ id: "", en: "All" }, ...CATEGORIES].map((c) => (
+        {[{ id: "", en: "All" }, ...categories].map((c) => (
           <button
             key={c.id}
             onClick={() => update({ category: c.id })}
@@ -112,11 +114,11 @@ export function BrowseView() {
         />
         <select value={author} onChange={(e) => update({ author: e.target.value })} className={select} aria-label="Writer">
           <option value="">All writers</option>
-          {AUTHORS.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          {authors.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
         <select value={lang} onChange={(e) => update({ lang: e.target.value })} className={select} aria-label="Language">
           <option value="">Any language</option>
-          {LANGS.map((l) => <option key={l}>{l}</option>)}
+          {langs.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
         </select>
         <select value={sort} onChange={(e) => update({ sort: e.target.value })} className={select} aria-label="Sort">
           {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}

@@ -22,3 +22,4 @@ Full analysis + conversion plan: `~/.claude/plans/see-the-data-extracted-01-fata
 ### Pipeline status
 `seed_fatawa_razawiyyah.py` → `fatawa/build.py` (CSV→TEI JSON, `out/`) → `import_fatawa.py` (DB). Done for all 31 volumes;
 see `apps/api/docs/data-import-fatawa-razawiyyah.md`.
+Chapter model: `chapters.level` 0 = group (کتاب/باب), 1 = booklet (رسالہ), 2 = chapter, 3 = sub-topic (`anchorId` → `<anchor xml:id>` in the parent TEI). Booklets and chapters own TEI.

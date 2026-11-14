@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next"
+import { Suspense } from "react"
 import { Amiri, Geist, Geist_Mono, Noto_Nastaliq_Urdu } from "next/font/google"
 
 import "@workspace/ui/globals.css"
@@ -46,7 +47,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <ThemeProvider>
           <SearchProvider>
             <div className="lib-root">
-              <SiteHeader />
+              {/* usePathname() is runtime data on dynamic routes: stream the (fixed-position) header */}
+              <Suspense fallback={null}>
+                <SiteHeader />
+              </Suspense>
               {children}
             </div>
           </SearchProvider>

@@ -6,6 +6,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
   HOST: z.string().default("0.0.0.0"),
   LOG_LEVEL: z.string().default("info"),
+  WEB_ORIGIN: z.string().default("http://localhost:3000"),
+  RATE_LIMIT_MAX: z.coerce.number().default(600),
   DATABASE_URL: z.string().min(1),
 })
 

@@ -90,6 +90,29 @@ def _el(tag: str, text: str, lang: str | None = None, **attrs) -> str:
     return f"<{tag}{a}>{esc(clean(text))}</{tag}>"
 
 
+def _mixed_note(t: str, lang: str) -> str:
+    """Footnote that may hold an Arabic quote followed by its Urdu meaning:
+    split at sentence marks (۔), tag each piece by script, wrap Arabic pieces."""
+    parts = [x for x in re.split(r"(?<=۔)\s*", t) if x.strip()]
+    if len(parts) < 2:
+        return _el("note", t, lang, type="footnote", place="foot")
+    segs: list[list] = []  # [lang, text]
+    for x in parts:
+        lg = text_script(x)
+        lg = "ur" if lg == "en" else lg
+        if segs and (segs[-1][0] == lg or len(x) < 30):  # short tails ("۱۲ کمالین (ت)") follow the previous piece
+            segs[-1][1] += " " + x
+        else:
+            segs.append([lg, x])
+    if len(segs) == 1:
+        return _el("note", t, segs[0][0], type="footnote", place="foot")
+    base = "ur"
+    inner = " ".join(
+        esc(x) if lg == base else f'<foreign xml:lang="{lg}">{esc(x)}</foreign>' for lg, x in segs
+    )
+    return f'<note xml:lang="{base}" type="footnote" place="foot">{inner}</note>'
+
+
 def row_to_tei(code: str, text: str) -> list[str]:
     """Return the TEI elements for one non-RTF row ([] for pure separators)."""
     if code == "w":
@@ -97,6 +120,22 @@ def row_to_tei(code: str, text: str) -> list[str]:
     t = clean(text)
     if not t:
         return []
+    lines = [clean(l) for l in re.split(r"[\r\n]+", text) if clean(l)]
+    if len(lines) > 1:
+        if code in ("h", "hc"):
+            # One heading, but each source line keeps its own line + language
+            # (title / Urdu gloss / basmala were running together as one line).
+            segs = []
+            for ln in lines:
+                # short title lines are Urdu even without Urdu-only letters; only the
+                # invocation lines (basmala / hamdala) are Arabic
+                lg = "ar" if re.match(r"(بسم|نحمدہ|الحمد)", strip_marks(ln)) and text_script(ln) == "ar" else "ur"
+                segs.append(f'<foreign xml:lang="{lg}">{esc(ln)}</foreign>')
+            a = ' type="sub"' if code == "hc" else ""
+            return [f'<head xml:lang="ur"{a}>' + "<lb/>".join(segs) + "</head>"]
+        if code not in ("i", "e", "ec"):
+            # Each source line is its own paragraph/note, with its own language.
+            return [e for ln in lines for e in row_to_tei(code, ln)]
     lang = text_script(t)
     lang = lang if lang != "en" or code in ("e", "ec") else "ur"
     if code == "h":
@@ -104,7 +143,7 @@ def row_to_tei(code: str, text: str) -> list[str]:
     if code == "hc":
         return [_el("head", t, lang, type="sub")]
     if code in ("u", "uc", "c"):
-        return [_el("p", t, "ur" if lang == "en" else lang)]
+        return [_el("p", t, "ur")]  # TextP u/uc/c = Urdu text, whatever letters it happens to use
     if code == "a":
         return [_el("p", t, "ar")]
     if code == "ac":
@@ -112,17 +151,33 @@ def row_to_tei(code: str, text: str) -> list[str]:
     if code in ("q", "qc"):
         return [_el("quote", t, "ar", type="quran")]
     if code in ("t", "tc"):
-        return [_el("note", t, lang, type="citation" if code == "t" else "citation-translation")]
+        # references ("تفسیر جلالین تحت آیۃ … ص ۳۶۵") are Urdu prose, even when the
+        # letters alone look Arabic
+        return [_el("note", t, "ur" if lang != "en" else "en", type="citation" if code == "t" else "citation-translation")]
     if code in ("s", "sc"):
         if is_separator(t):
             return []
-        return [_el("note", t, lang, type="footnote", place="foot")]
+        return [_mixed_note(t, lang)]
     if code == "i":
         # Images stay where they are (Images/ is untouched); we only reference the name.
         return [f'<figure><graphic url="Images/{esc(t)}"/></figure>']
     if code in ("e", "ec"):
         return [_el("p", t, "en")]
     return [_el("p", t, lang)]
+
+
+# RTF paragraph formatting (verified by surveying all 305 `w` rows in vols 1-30):
+# red/purple small text = citations/footnotes; centred 20pt Aslam = headings;
+# centred Arabic = quoted text; <=11pt = footnote; 7pt blanks = spacers.
+TITLE_FONTS = {"aslam", "alvi nastaleeq"}
+CITATION_COLORS = {"#ff0000", "#800080"}
+
+
+def _para_format(p: dict) -> tuple[float | None, str | None, bool]:
+    """(size_pt, colour, centred) of the paragraph's dominant (longest) run."""
+    runs = [r for r in p["runs"] if r["text"].strip()]
+    r = max(runs, key=lambda r: len(r["text"].strip())) if runs else {}
+    return r.get("size_pt"), (r.get("color") or "").lower() or None, p.get("alignment") == "center"
 
 
 # ── RTF rows ─────────────────────────────────────────────────────────────────
@@ -197,14 +252,27 @@ def rtf_to_tei(rtf: str) -> list[str]:
         if not inline:
             continue
         lang = "ar" if dom in ("arabic", "quran") else "ur"
-        if style.startswith("heading"):
-            out.append(f'<head xml:lang="{lang}">{inline}</head>')
+        size, color, centered = _para_format(p)
+        if size is not None and size <= 7 and len(text) < 3:
+            continue  # tiny spacer paragraph
+        rend = ' rend="center"' if centered else ""
+        if style.startswith("heading") or (
+            centered and size and size >= 20 and dom == "urdu" and len(text) <= 300 and "\n" not in text
+            and (p["runs"][0].get("font") or "").strip().lower() in TITLE_FONTS
+        ):
+            out.append(f'<head xml:lang="{lang}"{rend}>{inline}</head>')
         elif re.match(r"^\(?\s*[\d۰-۹]*\s*؎", text):
             out.append(f'<note type="citation" xml:lang="{lang}">{inline}</note>')
         elif text.startswith("عہ") and len(text) < 2000:
             out.append(f'<note type="footnote" place="foot" xml:lang="{lang}">{inline}</note>')
         elif dom == "quran":
             out.append(f'<quote type="quran" xml:lang="ar">{inline}</quote>')
+        elif color in CITATION_COLORS and size is not None and size <= 15:
+            out.append(f'<note type="citation" xml:lang="{lang}">{inline}</note>')
+        elif size is not None and size <= 11:
+            out.append(f'<note type="footnote" place="foot" xml:lang="{lang}">{inline}</note>')
+        elif dom == "arabic" and centered:
+            out.append(f'<quote xml:lang="ar">{inline}</quote>')
         else:
-            out.append(f'<p xml:lang="{lang}">{inline}</p>')
+            out.append(f'<p xml:lang="{lang}"{rend}>{inline}</p>')
     return out

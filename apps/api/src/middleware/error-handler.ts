@@ -1,17 +1,40 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify"
 
-export function errorHandler(
-  error: FastifyError,
-  request: FastifyRequest,
-  reply: FastifyReply,
-) {
-  const statusCode = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500
-  if (statusCode >= 500) request.log.error(error)
-  else request.log.warn(error.message)
+const NAMES: Record<number, string> = {
+  400: "Bad Request",
+  401: "Unauthorized",
+  403: "Forbidden",
+  404: "Not Found",
+  429: "Too Many Requests",
+}
+
+export function errorHandler(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
+  const code = (error as { code?: string }).code
+  let statusCode = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500
+  let message = error.message
+  let details: unknown
+
+  if (error.validation) {
+    statusCode = 400
+    message = "Validation failed"
+    details = error.validation.map((v) => ({
+      path: v.instancePath || "",
+      message: v.message,
+    }))
+  } else if (code === "P2025") {
+    statusCode = 404
+    message = "Resource not found"
+  }
+
+  if (statusCode >= 500) {
+    request.log.error({ err: error, reqId: request.id }, "request failed")
+    message = "Internal Server Error"
+  } else request.log.warn({ reqId: request.id }, message)
 
   reply.status(statusCode).send({
     statusCode,
-    error: statusCode >= 500 ? "Internal Server Error" : (error.name ?? "Error"),
-    message: statusCode >= 500 ? "Internal Server Error" : error.message,
+    error: NAMES[statusCode] ?? (statusCode >= 500 ? "Internal Server Error" : "Error"),
+    message,
+    ...(details ? { details } : {}),
   })
 }

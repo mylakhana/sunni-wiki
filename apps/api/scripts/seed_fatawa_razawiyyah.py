@@ -9,6 +9,8 @@ Behaviour (per CLAUDE.md "Data import"):
   * Author / Category / Book are upserted by slug (ids stay stable).
   * Volumes are derived from the folder names of the extracted data:
         "jild 1.1A" -> 1a, "jild 1.2B" -> 1b, "jild N" -> N  (N = 2..30)
+WARNING: the clean step deletes imported chapters/content of this book; re-run
+import_fatawa.py afterwards. The book is created with published=1.
 Reads DATABASE_URL from apps/api/.env (or the environment). Needs `pymysql`.
 """
 import argparse
@@ -39,6 +41,7 @@ BOOK = dict(
     titleAr="الفتاوى الرضوية",
     titleUr="فتاویٰ رضویہ",
     languages='["ar","ur"]',
+    published=1,
 )
 
 

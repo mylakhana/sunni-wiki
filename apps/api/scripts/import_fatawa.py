@@ -13,6 +13,7 @@ of the selected volumes are deleted, then re-inserted. Volumes themselves are ke
 """
 import argparse
 import json
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -58,12 +59,13 @@ def main() -> None:
                 chapters = json.loads((OUT_DIR / slug / "chapters.json").read_text(encoding="utf-8"))
                 ids: dict[str, int] = {}
                 n_content = 0
-                for c in chapters:  # parents always precede children
+                for c in chapters:  # books/chapters first, sub-topics last: parents always precede children
                     parent_id = ids.get(c["parent"]) if c["parent"] else None
                     cur.execute(
-                        "INSERT INTO chapters (bookId, volumeId, parentId, sort, slug, titleEn, titleUr) "
-                        "VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                        (book_id, vol_id, parent_id, c["sort"], c["slug"], c.get("titleEn"), c.get("titleUr")),
+                        "INSERT INTO chapters (bookId, volumeId, parentId, sort, level, anchorId, slug, titleEn, titleUr) "
+                        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                        (book_id, vol_id, parent_id, c["sort"], c.get("level", 1), c.get("anchorId"),
+                         c["slug"], c.get("titleEn"), c.get("titleUr")),
                     )
                     ids[c["key"]] = cur.lastrowid
                     if c["tei"]:
@@ -79,6 +81,12 @@ def main() -> None:
         raise
     finally:
         conn.close()
+    # Titles are only created here (the seed only makes volumes), so split the booklet
+    # titles (titleAr / titleUr) right after every successful import. Idempotent.
+    subprocess.run(
+        [sys.executable, str(Path(__file__).resolve().parent / "chapters_titles_sync.py"), "--mode", "fix"],
+        check=True,
+    )
 
 
 if __name__ == "__main__":
