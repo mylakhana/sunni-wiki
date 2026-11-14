@@ -7,10 +7,137 @@ datasource db {
   provider = "mysql"
 }
 
+// ─── Users (kept from scaffold) ──────────────────────────────────────────────
+
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
   name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// ─── Library catalogue ───────────────────────────────────────────────────────
+// Category 1─* Book *─1 Author
+// Book 1─* Volume (optional) 1─* Chapter
+// Book 1─* Chapter (always, so volume-less books work)
+// Chapter 1─* Content (usually exactly one; TEI XML)
+
+model Category {
+  id     Int    @id @default(autoincrement())
+  slug   String @unique @db.VarChar(100)
+  titleEn String @db.VarChar(255)
+  titleAr String? @db.VarChar(255)
+  titleUr String? @db.VarChar(255)
+  description String? @db.Text
+  sort   Int    @default(0)
+  books  Book[]
+
+  @@map("categories")
+}
+
+model Author {
+  id        Int     @id @default(autoincrement())
+  slug      String  @unique @db.VarChar(100)
+  nameEn    String  @db.VarChar(255)
+  nameAr    String? @db.VarChar(255)
+  nameUr    String? @db.VarChar(255)
+  birthYear Int? // Gregorian; display as "1856 – 1921"
+  deathYear Int?
+  bio       String? @db.Text
+  books     Book[]
+
+  @@map("authors")
+}
+
+model Book {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique @db.VarChar(150) // used in URLs: /books/[slug]
+  authorId    Int
+  categoryId  Int
+  titleEn     String   @db.VarChar(255)
+  titleAr     String?  @db.VarChar(255)
+  titleUr     String?  @db.VarChar(255)
+  description String?  @db.Text
+  // Languages the book's text is available in, e.g. ["ar","ur"]
+  languages   Json?
+  // Path under apps/web/public, e.g. "/books/fatawa-razawiyya/cover.jpg".
+  // null → UI falls back to the generated gradient cover.
+  coverImage  String?  @db.VarChar(255)
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author   Author    @relation(fields: [authorId], references: [id])
+  category Category  @relation(fields: [categoryId], references: [id])
+  volumes  Volume[]
+  chapters Chapter[]
+
+  @@index([authorId])
+  @@index([categoryId])
+  @@map("books")
+}
+
+// Optional layer. Books without volumes simply have no Volume rows and
+// Chapter.volumeId = null.
+model Volume {
+  id       Int     @id @default(autoincrement())
+  bookId   Int
+  slug     String  @db.VarChar(50) // English/alphanumeric: "1", "1a", "1b", "30"
+  sort     Int     @default(0) // display order (slugs aren't sortable as numbers)
+  titleEn  String? @db.VarChar(255)
+  titleAr  String? @db.VarChar(255)
+  titleUr  String? @db.VarChar(255)
+
+  book     Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  chapters Chapter[]
+
+  @@unique([bookId, slug])
+  @@map("volumes")
+}
+
+model Chapter {
+  id       Int  @id @default(autoincrement())
+  bookId   Int // always set (even when volumeId is set) → cheap "all chapters of book"
+  volumeId Int? // null for volume-less books
+  parentId Int? // optional nesting (part → chapter → section); null = top level
+  sort     Int  @default(0) // order within its siblings (same book/volume/parent)
+  slug     String @db.VarChar(150) // unique within the book: /books/[book]/[chapter]
+  titleEn  String? @db.VarChar(500)
+  titleAr  String? @db.VarChar(500)
+  titleUr  String? @db.VarChar(500)
+
+  book     Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  volume   Volume?   @relation(fields: [volumeId], references: [id], onDelete: Cascade)
+  parent   Chapter?  @relation("ChapterTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children Chapter[] @relation("ChapterTree")
+  contents Content[]
+
+  @@unique([bookId, slug])
+  @@index([bookId, volumeId, parentId, sort])
+  @@index([volumeId])
+  @@index([parentId])
+  @@map("chapters")
+}
+
+// The actual text. TEI XML is the single source of truth; every other form
+// (plain text, RAG chunks, embeddings, search index) is derived from it later.
+model Content {
+  id        Int      @id @default(autoincrement())
+  chapterId Int
+  // Usually one row per chapter holding all languages inline via xml:lang.
+  // Only add a second row if a separate full-text edition (e.g. a different
+  // translation) is ever needed. English-only slug, unique within the chapter.
+  slug      String   @default("default") @db.VarChar(50)
+  tei       String   @db.LongText // TEI XML fragment (<div>…</div>), not a full <TEI> doc
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([chapterId, slug])
+  @@map("content")
 }
