@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     description: "Read trusted Islamic books for free, in Arabic, Urdu or English.",
     locale: "en_US",
   },
-  twitter: { card: "summary", title: "SunniWiki · Islamic Books", description: "Read trusted Islamic books for free, in Arabic, Urdu or English." },
+  twitter: { card: "summary_large_image", title: "SunniWiki · Islamic Books", description: "Read trusted Islamic books for free, in Arabic, Urdu or English." },
 }
 
 export const viewport: Viewport = {

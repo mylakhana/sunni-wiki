@@ -4,6 +4,7 @@
  * SunniWiki AI chat panel, backed by the user's own local Ollama (browser -> localhost, nothing touches our servers).
  * Streams the reply, shows the model's thinking like ChatGPT, estimates token usage, renders Markdown.
  */
+import { Check, ChevronDown, Copy } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { fmt, tokensOf, type BuiltContext } from "@/lib/ai-context"
 import { effectiveCtx, estimateBreakdown, getModelContext, OllamaError, streamChat, type ChatMsg, type OllamaUsage } from "@/lib/ollama"
@@ -74,7 +75,7 @@ function TokenBar({ total, window }: { total: number; window: number }) {
   )
 }
 
-export function AskAiChat({ count, ctx, storageKey, onExit }: { count: number; ctx: BuiltContext; storageKey: string; onExit: () => void }) {
+export function AskAiChat({ count, ctx, storageKey, onExit, onCollapse }: { count: number; ctx: BuiltContext; storageKey: string; onExit: () => void; onCollapse?: () => void }) {
   const [settings, setSettings] = usePref<Settings>("ollama", DEFAULTS)
   // server AI (configured in apps/api/.env) is the default; `local` overrides it with the user's own Ollama
   const [server, setServer] = useState<{ configured: boolean; provider: string; model: string; contextTokens: number } | null>(null)
@@ -149,9 +150,12 @@ export function AskAiChat({ count, ctx, storageKey, onExit }: { count: number; c
       <div className="bd-line flex items-center justify-between gap-2 border-b p-3">
         <div>
           <h2 className="flex items-center gap-1.5 text-sm font-semibold"><svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l1.8 4.7L15.5 10.5l-4.7 1.8L9 17l-1.8-4.7L2.5 10.5l4.7-1.8L9 4zM18 3v4M16 5h4M18 15v4M16 17h4" /></svg> SunniWiki AI</h2>
-          <p className="c-muted text-[11px]">{count} items as context · ~{fmt(ctx.tokens)} tokens</p>
+          <p className="c-muted text-[11px]">{count} {count === 1 ? "item" : "items"} as context · ~{fmt(ctx.tokens)} tokens</p>
         </div>
+        <div className="flex items-center gap-1">
+        {onCollapse && <button type="button" onClick={onCollapse} className="c-muted grid h-9 w-9 place-items-center rounded-full lg:hidden" style={{ background: "var(--lib-line)" }} aria-label="Collapse chat to read the context" title="Collapse chat"><ChevronDown className="size-4" /></button>}
         <ChatMenu local={local} busy={busy} canClear={msgs.length > 0} onClear={() => setMsgs([])} onToggleLocal={() => setSettings({ ...settings, local: !local })} />
+        </div>
       </div>
 
       {!local && <p className="bd-line c-muted border-b px-3 py-2 text-[11px]" aria-label="AI settings">{server?.configured ? `${server.provider} | ${server.model}` : server ? "Server AI is not configured" : "…"}</p>}
@@ -190,7 +194,7 @@ export function AskAiChat({ count, ctx, storageKey, onExit }: { count: number; c
         {msgs.map((m, i) => {
           const last = i === msgs.length - 1
           const live = busy && last
-          if (m.role === "user") return <div key={i} className="bg-lib-accent ml-auto max-w-[90%] rounded-2xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap text-white" dir="auto">{m.text}</div>
+          if (m.role === "user") return <div key={i} className="bg-lib-accent ml-auto max-w-[90%] rounded-2xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap text-(--lib-bg)" dir="auto">{m.text}</div>
           return (
             <div key={i} className="space-y-2 text-sm">
               {m.thinking && <div className="px-1"><Thinking text={m.thinking} live={live && phase === "thinking"} secs={m.thinkSecs} /></div>}
@@ -202,6 +206,7 @@ export function AskAiChat({ count, ctx, storageKey, onExit }: { count: number; c
                   {m.usage && m.usage.promptTokens > 0 && <p className="c-muted num mt-2 text-[10px]">{fmt(m.usage.promptTokens)} in · {fmt(m.usage.outputTokens)} out tokens</p>}
                 </div>
               )}
+              {m.text && !live && <CopyButton text={m.text} />}
             </div>
           )
         })}
@@ -209,12 +214,23 @@ export function AskAiChat({ count, ctx, storageKey, onExit }: { count: number; c
 
       <TokenBar total={total} window={window} />
       <form onSubmit={(e) => { e.preventDefault(); void send() }} className="flex items-end gap-2 p-3 pt-2">
-        <textarea value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send() } }}
+        <textarea value={draft} onChange={(e) => setDraft(e.target.value)}
           rows={2} placeholder="Ask about the selected texts…" aria-label="Message" className="bg-lib-bg min-h-10 flex-1 resize-none rounded-xl px-3 py-2 text-sm outline-none" />
         {busy
           ? <button type="button" onClick={() => abort.current?.abort()} className={`${btn} bg-red-600 text-white`}>Stop</button>
-          : <button type="submit" disabled={!draft.trim() || noServer} className={`${btn} bg-lib-accent text-white disabled:opacity-40`}>Send</button>}
+          : <button type="submit" disabled={!draft.trim() || noServer} className={`${btn} bg-lib-accent text-(--lib-bg) disabled:opacity-40`}>Send</button>}
       </form>
     </div>
+  )
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [done, setDone] = useState(false)
+  return (
+    <button type="button" aria-label="Copy response"
+      onClick={() => { void navigator.clipboard.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500) }).catch(() => {}) }}
+      title={done ? "Copied" : "Copy"} className="c-muted hover:bg-lib-line hover:text-lib-accent rounded-md p-1.5">
+      {done ? <Check className="size-4" /> : <Copy className="size-4" />}
+    </button>
   )
 }

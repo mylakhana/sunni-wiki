@@ -98,7 +98,7 @@ export function AskAiPicker({ book, volumes, active, openVolume, openPath, onCan
             {over && <p className="text-xs text-red-600" role="alert">Too large for the AI: the limit is {fmt(cap)} chars (~{fmt(tokensOf(cap))} tokens). Deselect some items.</p>}
             <div className="flex items-center justify-between gap-3">
               <p className="c-muted num text-xs">{units.length ? `${units.length} selected · ${fmt(chars)} chars · ~${fmt(tokensOf(chars))} tokens` : "Nothing selected"}{sel.resolving && " · resolving…"}</p>
-              <button onClick={start} disabled={!units.length || over || sel.resolving} className={`${btn} bg-lib-accent text-white disabled:opacity-40`}>Continue</button>
+              <button onClick={start} disabled={!units.length || over || sel.resolving} className={`${btn} bg-lib-accent text-(--lib-bg) disabled:opacity-40`}>Continue</button>
             </div>
           </div>
         )}
@@ -153,10 +153,10 @@ export function AskAiContext({ book, authorPrompt, ids, fresh, onExit, onResolve
     setTimeout(() => setCopied(null), 2500)
   }
   const exitRow = (text: string, sub?: string, withCopy?: boolean) => (
-    <div className="card flex items-center justify-between gap-3 px-5 py-3" style={{ background: "color-mix(in srgb, #ef4444 14%, var(--lib-surface))" }}>
+    <div className="card flex flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between" style={{ background: "color-mix(in srgb, #ef4444 14%, var(--lib-surface))" }}>
       <div><p className="c-muted text-xs">{text}</p>{sub && <p className="c-muted num text-[11px]">{sub}</p>}</div>
-      <div className="flex shrink-0 items-center gap-2">
-        {withCopy && <button onClick={() => void copyAll()} title="Copy the system prompt + all selected texts, to use with any AI outside this site" className="rounded-full bg-lib-bg px-3 py-1.5 text-xs font-medium hover:opacity-80">{copied === "ok" ? "Copied ✓" : copied === "fail" ? "Copy failed" : "Copy system prompt + contents"}</button>}
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {withCopy && <button onClick={() => void copyAll()} title="Copy the system prompt and all selected texts, to paste into any other AI" className="rounded-full bg-lib-bg px-3 py-1.5 text-xs font-medium hover:opacity-80">{copied === "ok" ? "Copied ✓" : copied === "fail" ? "Copy failed" : "Copy context"}</button>}
       <button onClick={onExit} className="rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700">End AI chat</button>
       </div>
     </div>

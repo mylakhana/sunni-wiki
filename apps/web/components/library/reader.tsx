@@ -53,10 +53,18 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
   // PROTOTYPE "Ask AI": off -> pick (choose context in left panel) -> chat (context in main, chat on the right)
   const [ai, setAi] = useState<"off" | "pick" | "chat">("off")
   const [aiIds, setAiIds] = useState<string[]>([])
+  const [chatOpen, setChatOpen] = useState(true) // mobile only: chat is full-screen; collapsing reveals the context + page behind it
   const [aiReady, setAiReady] = useState(false) // context fetched / restored and validated: the chat panel may open
+  const chatCovering = ai === "chat" && aiReady && chatOpen
+  useEffect(() => { // mobile: the full-screen chat must not let the page behind it scroll
+    if (!chatCovering || !window.matchMedia("(max-width: 1023px)").matches) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => { document.body.style.overflow = prev }
+  }, [chatCovering])
   const [aiCtx, setAiCtx] = useState<BuiltContext | null>(null) // the exact system prompt + context the chat sends
   const [aiFresh, setAiFresh] = useState(false) // true right after the picker fetched everything (no need to revalidate)
-  const startAi = () => { setAi("pick"); patch({ collapsed: false }); setDrawer(true) }
+  const startAi = () => { setChatOpen(true); setAi("pick"); patch({ collapsed: false }); setDrawer(true) }
   /** Mirrors chat mode into the address bar (no navigation, so the server page is not re-rendered). */
   const syncUrl = (ids: string[] | null) => {
     const u = new URL(location.href)
@@ -214,7 +222,7 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
               <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M3 19 9 5l6 14M5 14h8M19 3v6M16 6h6" /></svg>
             </button>
           </div>
-          <button onClick={ai === "off" ? startAi : exitAi} aria-pressed={ai !== "off"} className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-medium ${ai !== "off" ? "bg-lib-accent text-white" : "c-muted hover:bg-(--lib-accent-soft)"}`} style={ai === "off" ? { background: "var(--lib-line)" } : undefined} title="SunniWiki AI">
+          <button onClick={ai === "off" ? startAi : exitAi} aria-pressed={ai !== "off"} className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-medium ${ai !== "off" ? "bg-lib-accent text-(--lib-bg)" : "c-muted hover:bg-(--lib-accent-soft)"}`} style={ai === "off" ? { background: "var(--lib-line)" } : undefined} title="SunniWiki AI">
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l1.8 4.7L15.5 10.5l-4.7 1.8L9 17l-1.8-4.7L2.5 10.5l4.7-1.8L9 4zM18 3v4M16 5h4M18 15v4M16 17h4" /></svg><span className="hidden sm:inline">SunniWiki AI</span>
           </button>
           <button onClick={shareChapter} className="c-muted flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-medium hover:bg-(--lib-accent-soft)" style={{ background: "var(--lib-line)" }} aria-label="Share this chapter" title="Share this chapter">
@@ -289,17 +297,25 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
         <main ref={readerRef} className="reader-area min-w-0 pb-8">
           {ai === "chat" ? <AskAiContext book={book.id} authorPrompt={book.authorPrompt} ids={aiIds} fresh={aiFresh} onExit={exitAi} onContext={setAiCtx} onResolved={(ids) => { if (!ids.length) { exitAi(); return } if (ids.length !== aiIds.length) { setAiIds(ids); syncUrl(ids) } setAiReady(true) }} /> : children}
         </main>
+        {ai === "chat" && aiReady && aiCtx && chatOpen && <div className="fixed inset-0 z-50 bg-black/40 lg:hidden" onClick={() => setChatOpen(false)} aria-hidden="true" />}
         {ai === "chat" && aiReady && aiCtx && (
-          <aside className="card fixed inset-x-3 bottom-3 z-50 flex h-[70vh] flex-col overflow-hidden lg:sticky lg:inset-auto lg:z-auto lg:h-[calc(100vh-var(--hdr)-100px)]" style={{ top: "calc(var(--hdr) + 72px)" }} aria-label="SunniWiki AI chat">
-            <AskAiChat key={aiIds.join(".")} count={aiIds.length} ctx={aiCtx} storageKey={`ask-ai:${aiIds.join(".")}`} onExit={exitAi} />
+          <aside className={`card fixed inset-x-0 top-12 bottom-0 z-50 flex flex-col overflow-hidden rounded-b-none shadow-2xl lg:sticky lg:inset-auto lg:z-auto lg:flex lg:h-[calc(100vh-var(--hdr)-100px)] lg:rounded-2xl lg:shadow-none lg:top-[calc(var(--hdr)+72px)] ${chatOpen ? "" : "max-lg:hidden"}`} aria-label="SunniWiki AI chat">
+            <AskAiChat key={aiIds.join(".")} count={aiIds.length} ctx={aiCtx} storageKey={`ask-ai:${aiIds.join(".")}`} onExit={exitAi} onCollapse={() => setChatOpen(false)} />
           </aside>
         )}
       </div>
 
-      <button onClick={() => setDrawer(true)}
-        className="bg-lib-accent fixed bottom-5 left-1/2 z-40 flex h-12 -translate-x-1/2 items-center gap-2 rounded-full px-6 text-sm font-medium text-white shadow-xl lg:hidden">
-        <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" /></svg> Contents
-      </button>
+      {ai === "chat" && aiReady && aiCtx && !chatOpen && (
+        <button onClick={() => setChatOpen(true)} className="card c-accent fixed right-4 bottom-5 z-40 flex h-12 items-center gap-2 rounded-full px-5 text-sm font-medium shadow-xl lg:hidden">
+          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l1.8 4.7L15.5 10.5l-4.7 1.8L9 17l-1.8-4.7L2.5 10.5l4.7-1.8L9 4zM18 3v4M16 5h4M18 15v4M16 17h4" /></svg> Chat
+        </button>
+      )}
+      {ai !== "chat" && (
+        <button onClick={() => setDrawer(true)}
+          className="card c-accent fixed bottom-5 left-1/2 z-40 flex h-12 -translate-x-1/2 items-center gap-2 rounded-full px-6 text-sm font-medium shadow-xl lg:hidden">
+          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" /></svg> Contents
+        </button>
+      )}
     </div>
     </ShellCtx.Provider>
   )

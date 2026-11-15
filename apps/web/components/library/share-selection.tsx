@@ -88,7 +88,9 @@ export function ShareSelection({ bookTitle, authorName, chapterTitle, part }: { 
   const [mobile, setMobile] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const toastT = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const article = useCallback(() => document.querySelector(".chapter-card"), [])
+  // this instance's own chapter card (several chapters can be on the page when the next one is streamed in below)
+  const marker = useRef<HTMLSpanElement>(null)
+  const article = useCallback(() => marker.current?.closest(".chapter-card") ?? null, [])
   useSharedHighlight(article)
 
   useEffect(() => {
@@ -154,7 +156,7 @@ export function ShareSelection({ bookTitle, authorName, chapterTitle, part }: { 
       <button className={btn} onClick={() => { void copy(`${sel.text}\n${cite}`, "Copied"); done() }}>Copy</button>
       <button className={btn} onClick={() => { void copy(link(sel), "Link copied"); done() }}>Copy link</button>
       {typeof navigator !== "undefined" && "share" in navigator && (
-        <button className={`${btn} bg-lib-accent text-white`} onClick={() => {
+        <button className={`${btn} bg-lib-accent text-(--lib-bg)`} onClick={() => {
           navigator.share({ title: `${chapterTitle} · ${bookTitle}`, text: `${sel.text}\n${cite}`, url: link(sel) }).catch(() => {})
           done()
         }}>Share</button>
@@ -163,6 +165,7 @@ export function ShareSelection({ bookTitle, authorName, chapterTitle, part }: { 
   )
   return (
     <>
+      <span ref={marker} hidden />
       {bar}
       <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex justify-center">
         {toast && <span className="rounded-full bg-black/80 px-4 py-2 text-sm text-white">{toast}</span>}

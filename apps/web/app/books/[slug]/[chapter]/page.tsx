@@ -9,16 +9,22 @@ import { titleOf } from "@/lib/types"
 
 type Props = {
   params: Promise<{ slug: string; chapter: string }>
-  searchParams: Promise<{ part?: string | string[] }>
+  searchParams: Promise<{ part?: string | string[]; q?: string | string[]; e?: string | string[] }>
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)?.trim() ?? ""
+
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { slug, chapter } = await params
+  const sp = await searchParams
+  // A shared passage link (?q=start[&e=end]) previews the quote itself.
+  const q = one(sp.q), e = one(sp.e)
   const [b, c] = await Promise.all([getBook(slug).catch(() => null), getChapter(slug, chapter).catch(() => null)])
   if (!b || !c) return { title: "Book" }
   const title = b.title
-  const description = `Read ${titleOf(c)} from ${b.title} by ${b.authorName}.`
-  return { title, description, openGraph: { title, description, type: "article" }, twitter: { card: "summary", title, description } }
+  const quote = q ? `“${q}${e ? ` … ${e}` : ""}”` : ""
+  const description = quote ? `${quote} — ${b.authorName}, ${b.title} · ${titleOf(c)}` : `Read ${titleOf(c)} from ${b.title} by ${b.authorName}.`
+  return { title, description, openGraph: { title, description, type: "article" }, twitter: { card: "summary_large_image", title, description } }
 }
 
 async function ChapterView({ params, searchParams }: Props) {

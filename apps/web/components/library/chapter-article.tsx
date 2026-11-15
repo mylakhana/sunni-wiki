@@ -68,7 +68,7 @@ export function ChapterArticle({ book, bookTitle, authorName, chapter, part = 1,
       <ShareSelection bookTitle={bookTitle} authorName={authorName} chapterTitle={titleOf(chapter)} part={part} />
       <nav className="bd-line mt-8 flex justify-between gap-3 border-t pt-6" aria-label="Chapter navigation">
         {prev ? <Link href={href(book, prev.slug)} className="bg-lib-bg inline-flex min-h-12 min-w-0 items-center rounded-full px-5 py-1.5 text-sm font-medium"><span className="flex flex-col items-start leading-tight"><span className="text-xs opacity-70">‹ Previous</span><span dir="rtl" className="block">{clip(titleOf(prev))}</span></span></Link> : <span />}
-        {next && <Link href={href(book, next.slug)} className="bg-lib-accent inline-flex min-h-12 min-w-0 items-center rounded-full px-5 py-1.5 text-sm font-medium text-white"><span className="flex flex-col items-end leading-tight"><span className="text-xs opacity-80">Next ›</span><span dir="rtl" className="block">{clip(titleOf(next))}</span></span></Link>}
+        {next && <Link href={href(book, next.slug)} className="bg-lib-accent inline-flex min-h-12 min-w-0 items-center rounded-full px-5 py-1.5 text-sm font-medium text-(--lib-bg)"><span className="flex flex-col items-end leading-tight"><span className="text-xs opacity-80">Next ›</span><span dir="rtl" className="block">{clip(titleOf(next))}</span></span></Link>}
       </nav>
       </>}
     </article>

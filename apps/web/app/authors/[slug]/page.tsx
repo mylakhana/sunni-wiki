@@ -3,7 +3,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Suspense } from "react"
 import { AuthorAvatar } from "@/components/library/author-avatar"
-import { BookGrid } from "@/components/library/book-card"
+import { AuthorBookSearch } from "@/components/library/list-search"
 import { EmptyState } from "@/components/library/empty-state"
 import { SiteFooter } from "@/components/library/site-footer"
 import { getAuthor, getLibraryForBuild } from "@/lib/api/library"
@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: a.name,
     description,
     openGraph: { title: a.name, description, type: "profile" },
-    twitter: { card: "summary", title: a.name, description },
+    twitter: { card: "summary_large_image", title: a.name, description },
   }
 }
 
@@ -49,7 +49,7 @@ async function AuthorDetail({ params }: Props) {
       </div>
       {a.bio && <p className="c-muted mt-6 max-w-2xl text-lg leading-relaxed">{a.bio}</p>}
       <h2 className="mt-14 mb-6 text-2xl font-semibold tracking-tight">Books by {a.name}</h2>
-      {books.length ? <BookGrid books={books} /> : <EmptyState title="No books yet" text="This writer has no published books." />}
+      {books.length ? <AuthorBookSearch books={books} /> : <EmptyState title="No books yet" text="This writer has no published books." />}
     </>
   )
 }

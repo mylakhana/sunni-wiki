@@ -6,7 +6,7 @@ export function EmptyState({ title, text, action }: { title: string; text?: stri
     <div className="py-20 text-center" role="status">
       <p className="text-lg font-medium">{title}</p>
       {text && <p className="c-muted mx-auto mt-2 max-w-sm text-sm">{text}</p>}
-      {action && <Link href={action.href} className="bg-lib-accent mt-5 inline-flex h-10 items-center rounded-full px-5 text-sm text-white">{action.label}</Link>}
+      {action && <Link href={action.href} className="bg-lib-accent mt-5 inline-flex h-10 items-center rounded-full px-5 text-sm text-(--lib-bg)">{action.label}</Link>}
     </div>
   )
 }

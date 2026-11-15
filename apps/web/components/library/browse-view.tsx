@@ -5,8 +5,9 @@ import { useMemo, useState } from "react"
 import type { Author, Book, Category } from "@/lib/types"
 import { langName } from "@/lib/ui"
 import { BookGrid } from "./book-card"
+import { FilterCombobox } from "./filter-combobox"
 
-const select = "card h-11 rounded-xl px-4 text-sm outline-none"
+const select = "card h-11 w-full min-w-0 rounded-xl px-4 text-sm outline-none"
 const SORTS = [
   { id: "new", label: "Newest first" },
   { id: "old", label: "Oldest first" },
@@ -93,14 +94,14 @@ export function BrowseView({ books, authors, categories }: { books: Book[]; auth
             key={c.id}
             onClick={() => update({ category: c.id })}
             aria-pressed={cat === c.id}
-            className={`h-10 shrink-0 rounded-full px-5 text-sm font-medium ${cat === c.id ? "bg-lib-accent text-white" : "card"}`}
+            className={`h-10 shrink-0 rounded-full px-5 text-sm font-medium ${cat === c.id ? "bg-lib-accent text-(--lib-bg)" : "card"}`}
           >
             {c.en}
           </button>
         ))}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <input
           type="search"
           value={q}
@@ -112,17 +113,12 @@ export function BrowseView({ books, authors, categories }: { books: Book[]; auth
           className={select}
           aria-label="Filter by title"
         />
-        <select value={author} onChange={(e) => update({ author: e.target.value })} className={select} aria-label="Writer">
-          <option value="">All writers</option>
-          {authors.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-        <select value={lang} onChange={(e) => update({ lang: e.target.value })} className={select} aria-label="Language">
-          <option value="">Any language</option>
-          {langs.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
-        </select>
-        <select value={sort} onChange={(e) => update({ sort: e.target.value })} className={select} aria-label="Sort">
-          {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-        </select>
+        <FilterCombobox label="Writer" value={author} onChange={(v) => update({ author: v })}
+          options={[{ value: "", label: "All writers" }, ...authors.map((a) => ({ value: a.id, label: a.name }))]} />
+        <FilterCombobox label="Language" value={lang} onChange={(v) => update({ lang: v })}
+          options={[{ value: "", label: "Any language" }, ...langs.map((l) => ({ value: l, label: langName(l) }))]} />
+        <FilterCombobox label="Sort" value={sort} onChange={(v) => update({ sort: v })}
+          options={SORTS.map((s) => ({ value: s.id, label: s.label }))} />
       </div>
 
       {active.length > 0 && (
@@ -146,7 +142,7 @@ export function BrowseView({ books, authors, categories }: { books: Book[]; auth
           </p>
           <button
             onClick={() => update({ category: "", author: "", lang: "", q: "" })}
-            className="bg-lib-accent mt-5 h-10 rounded-full px-5 text-sm text-white"
+            className="bg-lib-accent mt-5 h-10 rounded-full px-5 text-sm text-(--lib-bg)"
           >
             Show all books
           </button>
