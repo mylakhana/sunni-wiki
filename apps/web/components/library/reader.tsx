@@ -24,7 +24,7 @@ const GLASS: React.CSSProperties = { background: "color-mix(in srgb, var(--lib-b
 const FS_MIN = 0.6
 const FS_MAX = 2
 const FS_STEP = 0.1
-const sizeBtn = "c-muted grid h-9 w-9 place-items-center rounded-full hover:bg-(--lib-accent-soft) disabled:opacity-30"
+const sizeBtn = "c-muted grid h-8 w-8 place-items-center rounded-full hover:bg-(--lib-accent-soft) disabled:opacity-30"
 export const href = (book: string, chapter: string) => `/books/${encodeURIComponent(book)}/${encodeURIComponent(chapter)}`
 
 export const clip = (t: string, n = 40) => (t.length > n ? t.slice(0, n).trimEnd() + "…" : t)
@@ -39,8 +39,6 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
   const [fs, setFs] = usePref<number>("fs", 1)
   const [prefs, setPrefs] = usePref<Prefs>("rd", DEFAULT_PREFS)
   const [drawer, setDrawer] = useState(false)
-  const [sel, setSel] = useState<{ x: number; y: number; text: string } | null>(null)
-  const [copied, setCopied] = useState(false)
   const readerRef = useRef<HTMLElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
 
@@ -48,6 +46,18 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
   const next = chapter?.next
   const volume = chapter?.volume
   const patch = (p: Partial<Prefs>) => setPrefs((o) => ({ ...o, ...p }))
+  const [copied, setCopied] = useState(false)
+  const shareChapter = async () => {
+    const url = location.origin + location.pathname
+    try {
+      if (navigator.share) await navigator.share({ title: book.title, url })
+      else {
+        await navigator.clipboard.writeText(url)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      }
+    } catch {}
+  }
   const changeFs = (d: number) => setFs((o) => Math.min(FS_MAX, Math.max(FS_MIN, +(o + d).toFixed(2))))
   const chTitle = chapter ? titleOf(chapter) : ""
   const posKey = `${chapter?.slug}:${part}` // scroll position is remembered per chapter part
@@ -145,35 +155,6 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
     return () => window.removeEventListener("keydown", onKey)
   }, [book.id, next, prev, router, setPrefs])
 
-  // select-to-copy
-  useEffect(() => {
-    const onSel = () => {
-      const s = window.getSelection()
-      const m = readerRef.current
-      if (!s || s.isCollapsed || !m || !s.anchorNode || !m.contains(s.anchorNode)) return setSel(null)
-      const text = s.toString().trim()
-      if (!text) return setSel(null)
-      const r = s.getRangeAt(0).getBoundingClientRect()
-      setSel({ x: Math.min(Math.max(r.left + r.width / 2, 60), window.innerWidth - 60), y: Math.max(r.top - 8, 70), text })
-    }
-    const hide = () => setSel(null)
-    document.addEventListener("selectionchange", onSel)
-    window.addEventListener("scroll", hide, { passive: true })
-    return () => { document.removeEventListener("selectionchange", onSel); window.removeEventListener("scroll", hide) }
-  }, [])
-
-  const copySel = async () => {
-    if (!sel) return
-    const ref = [book.title, volume ? titleOf(volume, `Volume`) : null, chTitle].filter(Boolean).join(", ")
-    const out = `${sel.text}\n\n— ${ref}`
-    try { await navigator.clipboard.writeText(out) } catch {
-      const ta = document.createElement("textarea")
-      ta.value = out; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove()
-    }
-    setCopied(true)
-    setTimeout(() => { setCopied(false); setSel(null); window.getSelection()?.removeAllRanges() }, 900)
-  }
-
   return (
     <ShellCtx.Provider value={setCur}>
     <div
@@ -190,14 +171,20 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
             <h1 className="truncate text-sm font-semibold">{book.title}</h1>
             <p className="c-muted truncate text-[11px]">{volume ? `${titleOf(volume, "Volume")} · ` : ""}{chTitle}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Text size">
+          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex items-center rounded-full p-0.5" style={{ background: "var(--lib-line)" }} role="group" aria-label="Text size">
             <button onClick={() => changeFs(-FS_STEP)} disabled={fs <= FS_MIN} className={sizeBtn} aria-label="Decrease text size" title="Decrease text size">
               <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M3 19 9 5l6 14M5 14h8M17 6h5" /></svg>
             </button>
-            <button onClick={() => setFs(1)} className="c-muted num h-9 w-12 rounded-full text-xs font-medium" aria-label={`Text size ${Math.round(fs * 100)}%, reset to 100%`} title="Reset to 100%">{Math.round(fs * 100)}%</button>
+            <button onClick={() => setFs(1)} className="c-muted num h-8 w-11 rounded-full text-xs font-medium" aria-label={`Text size ${Math.round(fs * 100)}%, reset to 100%`} title="Reset to 100%">{Math.round(fs * 100)}%</button>
             <button onClick={() => changeFs(FS_STEP)} disabled={fs >= FS_MAX} className={sizeBtn} aria-label="Increase text size" title="Increase text size">
               <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M3 19 9 5l6 14M5 14h8M19 3v6M16 6h6" /></svg>
             </button>
+          </div>
+          <button onClick={shareChapter} className="c-muted flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-medium hover:bg-(--lib-accent-soft)" style={{ background: "var(--lib-line)" }} aria-label="Share this chapter" title="Share this chapter">
+            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13" /></svg>
+            <span className="hidden sm:inline">{copied ? "Copied" : "Share"}</span>
+          </button>
           </div>
         </div>
       </div>
@@ -212,9 +199,9 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
                   className="c-muted h-9 flex-1 rounded-lg text-sm font-medium capitalize">{k}</button>
               ))}
             </div>
-            <button onClick={() => setDrawer(false)} className="c-muted h-9 w-9 rounded-full lg:hidden" aria-label="Close contents">✕</button>
-            <button onClick={() => patch({ collapsed: true })} className="c-muted hidden h-9 w-9 place-items-center rounded-full lg:grid" aria-label="Hide contents" title="Hide contents ([)">
-              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6" /></svg>
+            <button onClick={() => setDrawer(false)} className="c-muted h-10 w-10 shrink-0 rounded-full lg:hidden" style={{ background: "var(--lib-line)" }} aria-label="Close contents">✕</button>
+            <button onClick={() => patch({ collapsed: true })} className="c-muted hidden h-10 w-10 shrink-0 place-items-center rounded-full lg:grid" style={{ background: "var(--lib-accent-soft)" }} aria-label="Hide contents" title="Hide contents ([)">
+              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /></svg>
             </button>
           </div>
 
@@ -239,6 +226,10 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
                     </div>
                   ))}
                 </dl>
+                <a href={`/api/books/${encodeURIComponent(book.id)}/export`} download className="bd-line c-accent mt-2 flex items-center justify-between border-t py-3 text-sm font-medium" title="Download the entire book as TEI XML (zip, one file per volume)">
+                  <span>Download entire book (zip)</span>
+                  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16" /></svg>
+                </a>
               </div>
             )}
           </div>
@@ -257,11 +248,6 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
         </main>
       </div>
 
-      {sel && (
-        <button onPointerDown={(e) => e.preventDefault()} onClick={copySel}
-          className="bg-lib-accent fixed z-[80] h-9 -translate-x-1/2 -translate-y-full rounded-full px-4 text-xs font-medium text-white shadow-xl"
-          style={{ left: sel.x, top: sel.y }}>{copied ? "Copied" : "Copy with reference"}</button>
-      )}
       <button onClick={() => setDrawer(true)}
         className="bg-lib-accent fixed bottom-5 left-1/2 z-40 flex h-12 -translate-x-1/2 items-center gap-2 rounded-full px-6 text-sm font-medium text-white shadow-xl lg:hidden">
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" /></svg> Contents

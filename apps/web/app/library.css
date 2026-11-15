@@ -35,7 +35,7 @@ body { background: var(--lib-bg); }
 .reader-area { font-size: calc(.875rem * var(--fs)); }
 .chapter-card { scroll-margin-top: 150px; }
 .blk-sh { font-size: 1.15em; font-weight: 600; margin: 1.6em 0 .5em; }
-.blk-h { font-size: 1.5em; font-weight: 700; letter-spacing: -.01em; margin: 1.9em 0 .6em; }
+.blk-h { font-size: 1.25em; font-weight: 700; letter-spacing: -.01em; margin: 1.9em 0 .6em; }
 .blk-p { line-height: 1.8; color: var(--lib-ink); margin: .8em 0; }
 .blk-ar { font-family: var(--font-amiri), serif; font-size: 1.9em; line-height: 2.1; direction: rtl; text-align: right; margin: .8em 0; }
 .blk-ur { font-family: var(--font-nastaliq), serif; font-size: 1.3em; line-height: 2.5; direction: rtl; text-align: right; margin: .8em 0; }

@@ -43,9 +43,9 @@ async function ChapterView({ params, searchParams }: Props) {
   const { tei, ...meta } = chapter
 
   return (
-    <ChapterArticle book={book.id} chapter={meta} part={part}>
+    <ChapterArticle book={book.id} bookTitle={book.title} authorName={book.authorName} chapter={meta} part={part}>
       {tei && tei.trim() ? (
-        <TeiContent tei={tei} part={part} book={slug} chapter={chapterSlug} />
+        <TeiContent tei={tei} part={part} book={slug} chapter={chapterSlug} titles={[meta.ur, meta.ar, meta.en].filter((x): x is string => !!x)} />
       ) : (
         <p className="blk-note">This section has no text of its own. Choose a sub-section from the contents.</p>
       )}

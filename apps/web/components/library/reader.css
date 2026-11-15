@@ -26,12 +26,24 @@
 .tei-quote { border-inline-start: 3px solid var(--lib-accent); padding: .3em 1em; margin: 1.2em 0; }
 .tei-ab { margin: 1.6em 0; }
 .tei-ab > .kind { font-size: .72em; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--lib-gold); }
-.tei-ab-question { background: var(--lib-accent-soft); border-radius: 18px; padding: .8em 1.4em; }
-.tei-ab-question > .kind { color: var(--lib-accent); }
+/* Questions can run for pages: no filled background, just an accent rail on the reading-start side */
+.tei-ab-question { border-inline-start: 3px solid var(--lib-accent); padding: .2em 1.2em; }
+.tei-ab-question > .kind { display: inline-block; margin-bottom: .5em; padding: .15em .7em; border-radius: 999px; background: var(--lib-accent-soft); color: var(--lib-accent); }
 .tei-pb { display: flex; align-items: center; gap: .75em; margin: 1.6em 0; color: var(--lib-muted); font-size: .72em; }
 .tei-pb::before, .tei-pb::after { content: ""; flex: 1; height: 1px; background: var(--lib-line); }
 .tei-figure-missing { margin: 1.4em 0; padding: 1.2em; text-align: center; color: var(--lib-muted); font-size: .85em; border: 1px dashed var(--lib-line); border-radius: 14px; }
 .tei-table td { vertical-align: top; }
 .blk-h.font-ur, .blk-h.font-ar { line-height: 2; }
+/* .blk-ar/.blk-ur set text-align:right in unlayered CSS, which beats Tailwind's text-center utility */
+.reader-root .blk-ar.text-center, .reader-root .blk-ur.text-center { text-align: center; }
+/* Multi-line title-page heads (contain <lb/>): centered, Urdu lines set in the Arabic face */
+.blk-h-title .font-ur, .blk-h-title .font-ar { font-family: var(--font-amiri), "Noto Naskh Arabic", serif; }
+/* Divider + spacing above the first Arabic line (basmala) that follows the Urdu title lines */
+.blk-h-title [lang="ur"] + br + [lang="ar"] { display: block; border-top: 1px solid var(--lib-line); }
+/* The span is now a block, so the <br> right after it would add an empty line */
+.blk-h-title [lang="ur"] + br + [lang="ar"] + br { display: none; }
 .tei-note-inline { color: var(--lib-muted); font-size: .9em; }
 .tei-pb-inline { color: var(--lib-muted); font-size: .75em; }
+
+/* shared-passage highlight (CSS Custom Highlight API) */
+::highlight(shared-quote) { background: color-mix(in srgb, var(--lib-gold) 40%, transparent); color: inherit; }

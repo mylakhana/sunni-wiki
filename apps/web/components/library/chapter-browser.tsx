@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { loadChapterLevel } from "@/lib/actions"
 import type { ChapterItem, Volume } from "@/lib/types"
 import { titleOf } from "@/lib/types"
@@ -16,13 +16,14 @@ const levels = new Map<string, ChapterItem[]>()
 
 const norm = (s: string) => s.toLowerCase()
 const matches = (c: ChapterItem, f: string) => !f || [c.en, c.ar, c.ur].some((t) => t && norm(t).includes(f))
-const chev = (open: boolean) => (
-  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" className={open ? "rotate-90 transition" : "transition"}><path d="m9 6 6 6-6 6" /></svg>
+/** `rtl`: the title reads right-to-left (Arabic / Urdu), so the collapsed chevron points left. */
+const chev = (open: boolean, rtl = false) => (
+  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" className={`transition ${open ? "rotate-90" : rtl ? "rotate-180" : ""}`}><path d="m9 6 6 6-6 6" /></svg>
 )
 
 /** One level of the contents tree; fetched when first rendered. */
 /** `only`: show just these levels (a booklet lists its chapters, not the sub-topic anchors of its intro). */
-function ChapterLevel({ ctx, volume, parent, quiet = false, only }: { ctx: Ctx; volume: string | null; parent: string | null; quiet?: boolean; only?: number[] }) {
+function ChapterLevel({ ctx, volume, parent, quiet = false, only, onEmpty }: { ctx: Ctx; volume: string | null; parent: string | null; quiet?: boolean; only?: number[]; onEmpty?: () => void }) {
   const key = `${ctx.book}|${volume ?? ""}|${parent ?? ""}`
   const [res, setRes] = useState<Level | "loading">(() => (levels.has(key) ? { items: levels.get(key)! } : "loading"))
   const [attempt, setAttempt] = useState(0)
@@ -39,6 +40,9 @@ function ChapterLevel({ ctx, volume, parent, quiet = false, only }: { ctx: Ctx; 
     return () => { live = false }
   }, [key, ctx.book, volume, parent, attempt])
 
+  const loaded = res !== "loading" && "items" in res
+  const nothing = loaded && !(only ? res.items.filter((c) => only.includes(c.level)) : res.items).some((c) => ctx.topics || c.level <= 1)
+  useEffect(() => { if (nothing) onEmpty?.() }, [nothing, onEmpty])
   if (res === "loading") return <p className="c-muted px-3 py-2 text-xs" role="status">Loading…</p>
   if ("error" in res) {
     return (
@@ -73,26 +77,30 @@ function GroupNode({ ctx, item }: { ctx: Ctx; item: ChapterItem }) {
 
 function ChapterNode({ ctx, item }: { ctx: Ctx; item: ChapterItem }) {
   const [open, setOpen] = useState(() => ctx.openPath.includes(item.id))
+  const [empty, setEmpty] = useState(false) // discovered at runtime: expanded, yet the level has nothing to show
+  const markEmpty = useCallback(() => { setEmpty(true); setOpen(false) }, [])
   const wantOpen = ctx.openPath.includes(item.id)
   // the shell persists across chapters: open the ancestors of the newly shown chapter
   useEffect(() => { if (wantOpen) setOpen(true) }, [wantOpen])
   if (item.level === 0) return <GroupNode ctx={ctx} item={item} />
   const isActive = item.slug === ctx.active
+  // children of a booklet / chapter are all topics-level (2+), which are hidden when "Show Topics" is off: nothing to expand then
+  const expandable = item.hasChildren && ctx.topics && !empty
   return (
     <li>
       {/* a booklet (level 1) is a tile: the link opens it, only the chevron expands its chapters */}
       <div className={`side-item flex items-start gap-1 rounded-xl ${item.level === 1 ? "bd-line border" : ""} ${isActive ? "active" : ""}`} data-nav={item.slug}>
-        {item.hasChildren ? (
+        {expandable ? (
           <button onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={`${open ? "Collapse" : "Expand"} ${titleOf(item)}`}
-            className="c-muted mt-2 grid h-8 w-8 shrink-0 place-items-center rounded-full">{chev(open)}</button>
+            className="c-muted mt-2 grid h-8 w-8 shrink-0 place-items-center rounded-full">{chev(open, !!(item.ar || item.ur))}</button>
         ) : <span className="w-2 shrink-0" />}
         <Link href={`/books/${encodeURIComponent(ctx.book)}/${encodeURIComponent(item.slug)}`} aria-current={isActive ? "page" : undefined} className="min-w-0 flex-1 py-2 pr-3">
           <ChapterTitles t={item} />
         </Link>
       </div>
-      {open && item.hasChildren && (
+      {open && expandable && (
         <div className="border-lib-line ml-4 border-l pl-1">
-          <ChapterLevel ctx={ctx} volume={null} parent={item.id} only={item.level === 1 ? [2] : undefined} />
+          <ChapterLevel ctx={ctx} volume={null} parent={item.id} only={item.level === 1 ? [2] : undefined} onEmpty={markEmpty} />
         </div>
       )}
     </li>
@@ -102,16 +110,17 @@ function ChapterNode({ ctx, item }: { ctx: Ctx; item: ChapterItem }) {
 function VolumeSection({ ctx, volume, defaultOpen }: { ctx: Ctx; volume: Volume; defaultOpen: boolean }) {
   const [open, setOpen] = useState(defaultOpen)
   useEffect(() => { if (defaultOpen) setOpen(true) }, [defaultOpen])
+  const count = ctx.topics ? volume.chapterCount : volume.topLevelCount
   return (
     <section className="bd-line border-b last:border-b-0">
       <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex h-12 w-full items-center justify-between px-3 text-left">
         <span className="min-w-0 font-medium">
           {volume.en || volume.ar || volume.ur || `Volume ${volume.sort}`}
-          <span className="c-muted ml-2 text-xs font-normal">{ctx.topics ? volume.chapterCount : volume.topLevelCount} chapters</span>
+          <span className="c-muted ml-2 text-xs font-normal">{count} chapters</span>
         </span>
-        <span className="c-muted">{chev(open)}</span>
+        {count > 0 && <span className="c-muted">{chev(open)}</span>}
       </button>
-      {open && <div className="pb-3"><ChapterLevel ctx={ctx} volume={volume.slug} parent={null} /></div>}
+      {open && count > 0 && <div className="pb-3"><ChapterLevel ctx={ctx} volume={volume.slug} parent={null} /></div>}
     </section>
   )
 }

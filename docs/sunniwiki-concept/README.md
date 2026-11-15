@@ -22,6 +22,7 @@ A free, public library of trusted Islamic books, readable in Arabic, Urdu and En
 - Routes: `/` home, `/browse`, `/authors`, `/authors/[slug]`, `/books/[slug]` (volumes + lazily loaded chapter tree, title filter), `/books/[slug]/[chapter]` (**one chapter per page**; very long chapters are split into `?part=N` pages).
 - **Caching:** `cacheComponents: true`. Loaders use `use cache` with `cacheLife` and `cacheTag` (`library`, per-book, per-author). The library (all books, authors, categories) is cached in memory **per web server instance** (~1 h). Failures are never cached for long. Invalidate with `revalidateTag("library")`.
 - Reader renders TEI to React (`lib/tei/render.tsx`), no `dangerouslySetInnerHTML`. Reading prefs and "continue reading" live in localStorage (`last:v2`, slugs).
+- **Share selection** (`components/library/share-selection.tsx`): selecting chapter text shows a toolbar (floating on laptop, bottom bar on mobile) with Copy (adds citation), Copy link and native Share. The link is `?part&q[&e]#<nearest s-anchor>`; `q` is the selected text (long selections keep only the first/last 40 chars, `q` + `e`). On load the text is re-found (diacritics/whitespace ignored) and highlighted via the CSS Custom Highlight API (`::highlight(shared-quote)`). Share-as-image is not built yet.
 - **Decisions:** in-book full-text search is dropped for now (title filter only); no reading-progress percentage (API has no total chapter count).
 
 ## Known gaps

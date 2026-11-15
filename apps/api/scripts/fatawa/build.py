@@ -117,29 +117,117 @@ def is_group(node: dict) -> bool:
     return bool(node["children"]) and bool(_GROUP_TITLE.match(tei.strip_marks(node["title"]).strip()))
 
 
+def _grams(s: str) -> set[str]:
+    """Character 3-grams of the letters only (marks, spaces and punctuation dropped): robust to spelling/spacing variants."""
+    t = re.sub(r"[^\w]|\d|_", "", tei.strip_marks(s))
+    return {t[i:i + 3] for i in range(len(t) - 2)}
+
+
+TIE_MARGIN = 0.1  # a later entry only displaces an earlier one if its title matches clearly better (headings inside a fatwa follow it in the TOC)
+
+
+def _pick_for_candidates(group: list[dict], spans: list[str]) -> list[int]:
+    """More index entries than start rows on one page: some entries are headings INSIDE a fatwa, not fatawa.
+    Choose, in order, which len(spans) entries own the start rows: maximise how much of each entry's title
+    appears in the text that follows its row (monotonic DP; near-ties keep the earlier entry). Returns indexes into group."""
+    g, c = len(group), len(spans)
+    span_g = [_grams(t) for t in spans]
+    sim = [[0.0] * c for _ in range(g)]
+    for i, ch in enumerate(group):
+        tg = _grams(ch["title"])
+        if tg:
+            for j in range(c):
+                sim[i][j] = len(tg & span_g[j]) / len(tg)
+        if ch.get("level") == 1:  # a booklet (رسالہ) always owns the start row it shares with its first chapter
+            for j in range(c):
+                sim[i][j] += 2.0
+    NEG = float("-inf")
+    best = [[NEG] * (c + 1) for _ in range(g + 1)]  # best[i][j]: first i entries fill first j rows
+    take = [[False] * (c + 1) for _ in range(g + 1)]
+    for i in range(g + 1):
+        best[i][0] = 0.0
+    for i in range(1, g + 1):
+        for j in range(1, min(i, c) + 1):
+            skip = best[i - 1][j]
+            use = best[i - 1][j - 1] + sim[i - 1][j - 1] if best[i - 1][j - 1] > NEG else NEG
+            if use > skip + TIE_MARGIN:
+                best[i][j], take[i][j] = use, True
+            else:
+                best[i][j] = skip
+    picked, i, j = [], g, c
+    while j > 0 and i > 0:
+        if take[i][j]:
+            picked.append(i - 1)
+            j -= 1
+        i -= 1
+    return picked[::-1]
+
+
 def place_chapters(chapters: list[dict], rows: list[dict], cands: list[int], idx_page: dict) -> dict:
     """chapter no -> start row. Reading (page) order; start = first start-candidate on the
-    chapter's page after the cursor, else the page's first row if no chapter began on that page yet."""
+    chapter's page after the cursor, else the page's first row if no chapter began on that page yet.
+    When a page lists more entries than it has start rows, the entries whose titles best match the text
+    get the rows (the others are headings inside a fatwa and become sub-topics)."""
     placed, cursor = {}, -1
     first_row_of_page: dict[int, int] = {}
     for i, r in enumerate(rows):
         first_row_of_page.setdefault(r["page"], i)
-    for ch in chapters:
-        page = idx_page.get(ch["no"])
+    i = 0
+    while i < len(chapters):
+        page = idx_page.get(chapters[i]["no"])
         if page is None:
+            i += 1
             continue
-        row = next((c for c in cands if c > cursor and rows[c]["page"] == page), None)
-        if row is None:
-            fr = first_row_of_page.get(page)
-            if fr is not None and fr > cursor:
-                row = fr
-        if row is not None:
-            placed[ch["no"]] = row
-            cursor = row
+        j = i
+        while j < len(chapters) and idx_page.get(chapters[j]["no"]) == page:
+            j += 1
+        group = chapters[i:j]
+        i = j
+        avail = [c for c in cands if c > cursor and rows[c]["page"] == page]
+        if len(group) > len(avail) >= 1:
+            spans = []
+            for c in avail:
+                nxt = next((x for x in cands if x > c), len(rows))
+                spans.append(" ".join(r["text"] for r in rows[c:min(nxt, c + 60)]))
+            for k, ci in zip(picked := _pick_for_candidates(group, spans), avail):
+                placed[group[k]["no"]] = ci
+                cursor = ci
+            continue
+        for ch in group:
+            row = next((c for c in cands if c > cursor and rows[c]["page"] == page), None)
+            if row is None:
+                fr = first_row_of_page.get(page)
+                if fr is not None and fr > cursor:
+                    row = fr
+            if row is not None:
+                placed[ch["no"]] = row
+                cursor = row
     return placed
 
 
 # ── TEI assembly ─────────────────────────────────────────────────────────────
+def front_heading(rows: list[dict], first: int) -> str | None:
+    """Title for the pre-index "front" chapter: the first heading row's text (minus Bismillah lines), else None."""
+    for r in rows[:first]:
+        if r["code"] not in ("h", "hc"):
+            continue
+        lines = [re.sub(r"\s+", " ", l).strip() for l in r["text"].splitlines()]
+        lines = [l for l in lines if l and "بسم" not in l]
+        if not lines:
+            continue
+        t = lines[0]
+        if t in ("رسالہ", "رسالہ ضمنیہ") and len(lines) > 1:
+            t = f"{t}: {lines[1]}"
+        return (t[1:-1] if t.startswith("(") and t.endswith(")") and t.count("(") == 1 else t).strip() or None
+    # no heading: fall back to a short first line (e.g. vol 1a's abbreviations table), never a bare Bismillah
+    for r in rows[:first]:
+        line = next((l.strip() for l in r["text"].splitlines() if l.strip()), "")
+        if line and "بسم" not in line and len(line) <= 80:
+            return line
+        break
+    return None
+
+
 def unit_tei(rows: list[dict], lo: int, hi: int, title: str | None, kind: str, n: str | None,
              page_book: dict, state: dict, anchors: dict) -> str:
     """One chapter's TEI. Each question ("مسئلہ N") / answer ("الجواب") becomes an <ab>."""
@@ -311,8 +399,14 @@ def build_volume(slug: str, folder: Path, report: dict) -> list[dict]:
                     "titleUr": title, "titleEn": title_en, "level": level, "anchorId": anchor, "tei": xml})
         sibling_sort[k] += 1
 
-    if first > 0 or not starts:
-        add("front", None, None, 2, unit_tei(rows, 0, first, None, "front", None, page_book, state, anchors), title_en="Front matter")
+    front_title = front_heading(rows, first)
+    # a front chapter holding only a Bismillah is noise: skip it (re-run build + import to apply)
+    has_front = (first > 0 or not starts) and not (
+        front_title is None and all(not r["text"].replace("بسم", "").strip() or "بسم" in r["text"] and len(r["text"]) < 60
+                                    for r in rows[:first]))
+    if has_front:
+        add("front", None, front_title, 2, unit_tei(rows, 0, first, None, "front", None, page_book, state, anchors),
+            title_en=None if front_title else "Front matter")
     for n in toc:
         if n["level"] == 3:
             continue
@@ -324,10 +418,13 @@ def build_volume(slug: str, folder: Path, report: dict) -> list[dict]:
         add(n["no"], parent, n["title"], n["level"], xml)
     for n in sorted((n for n in toc if n["level"] == 3), key=lambda n: idx_key(n["no"])):
         row = sub_row.get(n["no"])
-        ch = chapter_of_row(row) if row is not None else None
-        if ch is None:  # before the first unit -> front matter, or no page at all
-            ch = "front" if (row is not None and first > 0) else (next(iter(placed), None))
-        add(n["no"], ch, n["title"], 3, anchor=f's-{n["no"]}' if row is not None else None)
+        if row is None:  # no page in Map.csv: nothing to jump to and no chapter to belong to -> do not create a row
+            rep.setdefault("subtopics_dropped_no_page", []).append(n["no"])
+            continue
+        ch = chapter_of_row(row)
+        if ch is None:  # before the first unit -> front matter
+            ch = "front" if has_front else next(iter(placed), None)
+        add(n["no"], ch, n["title"], 3, anchor=f's-{n["no"]}')
     rep["rows_emitted"] = state["emitted"]
     rep["rows_parity_ok"] = state["emitted"] == len(rows)
     rep["pages_not_in_map_emitted"] = sorted(state["unmapped_pages"])

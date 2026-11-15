@@ -30,6 +30,15 @@ function langOf(a: Record<string, string | undefined>): Lang {
 const langClass = (l: Lang) => (l === "ar" ? "blk-ar" : l === "ur" ? "blk-ur" : "blk-p")
 const fontClass = (l: Lang) => (l === "ar" ? "font-ar" : l === "ur" ? "font-ur" : "")
 const dirOf = (l: Lang) => (l === "ar" || l === "ur" ? ("rtl" as const) : ("auto" as const))
+const textOf = (nodes: XNode[]): string =>
+  nodes.map((n) => ("#text" in n ? String(n["#text"]) : textOf(kids(n, tagOf(n) ?? "")))).join("")
+/** Short Arabic formulae (basmala, hamdala/salawat, "الجواب") are set centered; longer Arabic prose stays start-aligned.
+ *  Short Arabic quotes carrying a footnote marker (؂ U+0602, e.g. "…۳؂") sit mid-body and stay start-aligned too. */
+const MAX_CENTERED_AR = 160
+const centerArabicP = (c: XNode[]) => {
+  const t = textOf(c).trim()
+  return t.length <= MAX_CENTERED_AR && !t.includes("؂")
+}
 const isBlank = (n: XNode) => typeof n["#text"] === "string" && !(n["#text"] as string).trim()
 
 /** Inline content: text, <hi>, <foreign>, <note> inside paragraphs, etc. */
@@ -55,12 +64,12 @@ function block(n: XNode, key: number, isInline: boolean): ReactNode {
       return <section key={key} className="tei-div">{children(c)}</section>
     case "head":
       return (
-        <h3 key={key} className={`blk-h tei-block ${lang ? fontClass(lang) : "font-ur"}${a["@_rend"] === "center" ? " text-center" : ""}`} dir={lang === "en" ? "ltr" : "rtl"}>
+        <h3 key={key} className={`blk-h tei-block ${lang ? fontClass(lang) : "font-ur"}${a["@_rend"] === "center" || c.some((x) => tagOf(x) === "lb") ? " text-center blk-h-title" : lang === "ar" ? " text-center" : ""}`} dir={lang === "en" ? "ltr" : "rtl"}>
           {inline(c)}
         </h3>
       )
     case "p":
-      return <p key={key} className={`${langClass(lang)} tei-block${a["@_rend"] === "center" ? " text-center" : ""}`} dir={dirOf(lang)}>{inline(c)}</p>
+      return <p key={key} className={`${langClass(lang)} tei-block${a["@_rend"] === "center" || (lang === "ar" && centerArabicP(c)) ? " text-center" : ""}`} dir={dirOf(lang)}>{inline(c)}</p>
     case "quote": {
       if (isInline) return <q key={key} lang={lang} className={fontClass(lang)}>{inline(c)}</q>
       if (a["@_type"] === "quran") {
@@ -205,6 +214,32 @@ export function partOfAnchor(tei: string, id: string): number {
   }
 }
 
+const plain = (nodes: XNode[]): string =>
+  nodes.map((n) => ("#text" in n ? String(n["#text"]) : (() => { const t = tagOf(n); return t ? plain(kids(n, t)) : "" })())).join("")
+const norm = (s: string) => s.replace(/\s+/g, " ").trim()
+
+/**
+ * Removes the leading <head> when it merely repeats the chapter title (already shown in the page header).
+ * Only the first meaningful node (descending through leading div/ab wrappers) is considered.
+ */
+function dropTitleHead(nodes: XNode[], titles: string[]): XNode[] {
+  const wanted = new Set(titles.map(norm).filter(Boolean))
+  if (!wanted.size) return nodes
+  const walk = (list: XNode[]): XNode[] => {
+    const i = list.findIndex((n) => !isBlank(n) && tagOf(n) !== "anchor" && tagOf(n) !== "pb")
+    if (i < 0) return list
+    const n = list[i]!
+    const t = tagOf(n)
+    if (t === "head") return wanted.has(norm(plain(kids(n, t)))) ? list.filter((_, j) => j !== i) : list
+    if (t && CONTAINERS.has(t)) {
+      const inner = walk(kids(n, t))
+      return inner === kids(n, t) ? list : list.map((x, j) => (j === i ? { ...n, [t]: inner } : x))
+    }
+    return list
+  }
+  return walk(nodes)
+}
+
 function parseTei(tei: string): XNode[] | null {
   try {
     return (parser.parse(tei) as XNode[]).filter((n) => tagOf(n) !== "?xml")
@@ -218,8 +253,9 @@ function parseTei(tei: string): XNode[] | null {
  * (never shown to the reader): part 1 is rendered with the page, the next ones are requested as the reader reaches the end.
  * Returns the number of parts too, so the caller knows whether more follow.
  */
-export function renderTeiPart(tei: string, part = 1): { node: ReactNode; parts: number } {
-  const tree = parseTei(tei)
+export function renderTeiPart(tei: string, part = 1, titles: string[] = []): { node: ReactNode; parts: number } {
+  const parsed = parseTei(tei)
+  const tree = parsed && titles.length ? dropTitleHead(parsed, titles) : parsed
   if (!tree) return { node: <p className="blk-note">This chapter&rsquo;s text could not be displayed.</p>, parts: 1 }
   if (!isLongTei(tei)) return { node: children(tree), parts: 1 }
   const parts = Math.max(1, Math.ceil(leafTotal(tree) / PART_BUDGET))
@@ -228,8 +264,8 @@ export function renderTeiPart(tei: string, part = 1): { node: ReactNode; parts: 
 }
 
 /** Renders the chapter text from `part` on; the following parts of a long chapter are appended on demand by <LazyParts>. */
-export function TeiContent({ tei, part = 1, book, chapter }: { tei: string; part?: number; book: string; chapter: string }) {
-  const { node, parts } = renderTeiPart(tei, part)
+export function TeiContent({ tei, part = 1, book, chapter, titles = [] }: { tei: string; part?: number; book: string; chapter: string; titles?: string[] }) {
+  const { node, parts } = renderTeiPart(tei, part, titles)
   const first = Math.min(Math.max(1, part), parts)
   return (
     <div className="tei-root">

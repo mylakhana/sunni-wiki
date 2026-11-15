@@ -16,7 +16,7 @@ export async function loadChapterPart(
   try {
     const c = await getChapter(book, chapter)
     if (!c?.tei) return { error: true }
-    const { node, parts } = renderTeiPart(c.tei, part)
+    const { node, parts } = renderTeiPart(c.tei, part, [c.ur, c.ar, c.en].filter((x): x is string => !!x))
     return { node, hasMore: part < parts }
   } catch (e) {
     console.error("[web] chapter part failed:", e instanceof Error ? e.message : e)

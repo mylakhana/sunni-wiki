@@ -13,11 +13,15 @@ import {
   chaptersQuerySchema,
 } from "../../schemas/library.js"
 import { ChapterService } from "../../services/chapter.service.js"
+import { ExportService } from "../../services/export.service.js"
+import { zipStream } from "../../services/zip.js"
+import { Readable } from "node:stream"
 import { LibraryService } from "../../services/library.service.js"
 
 export default async function booksRoute(app: FastifyInstance) {
   const library = new LibraryService(prisma, app)
   const chapters = new ChapterService(prisma, app)
+  const exporter = new ExportService(prisma, app)
   const r = app.withTypeProvider<FastifyZodOpenApiTypeProvider>()
 
   r.get(
@@ -75,5 +79,24 @@ export default async function booksRoute(app: FastifyInstance) {
       },
     },
     async (req) => chapters.detail(req.params.slug, req.params.chapterSlug),
+  )
+
+  r.get(
+    "/books/:slug/export",
+    {
+      schema: {
+        tags: ["books"],
+        summary: "Download the whole book as a ZIP of TEI XML files (one per volume)",
+        params: slugParamSchema,
+      },
+    },
+    async (req, reply) => {
+      const book = await exporter.book(req.params.slug)
+      return reply
+        .header("content-type", "application/zip")
+        .header("content-disposition", `attachment; filename="${book.slug}-tei.zip"`)
+        .header("content-encoding", "identity") // already compressed: skip @fastify/compress
+        .send(Readable.from(zipStream(exporter.entries(book))))
+    },
   )
 }
