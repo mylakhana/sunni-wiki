@@ -4,6 +4,7 @@ To add another book of the same CSV family (IndexContainer.csv + TextContainer.c
 PageNo shared by index and text) append an entry to BOOKS. Every book gets its own DB rows (looked up by slug)
 and its own output folder scripts/out/<book slug>/, so books never touch each other.
 """
+import json
 import re
 from pathlib import Path
 
@@ -11,8 +12,12 @@ API_DIR = Path(__file__).resolve().parents[2]
 DATA_ROOT = API_DIR.parents[2] / "data-extracted"  # v3/data-extracted (sibling of sunni-wiki/)
 
 CATEGORIES = {
+    "fatawa": dict(slug="fatawa", titleEn="Fatawa", titleAr="فتاوى", titleUr="فتاویٰ", sort=0),  # same as the Fatawa seed
     "hadith": dict(slug="hadith", titleEn="Hadith", titleAr="الحديث", titleUr="حدیث", sort=2),
     "tafseer": dict(slug="tafseer", titleEn="Tafseer", titleAr="التفسير", titleUr="تفسیر", sort=3),
+    "aqaid": dict(slug="aqaid", titleEn="Aqaid & Kalam", titleAr="العقائد والكلام", titleUr="عقائد و کلام", sort=5),
+    "tasawwuf": dict(slug="tasawwuf", titleEn="Tasawwuf", titleAr="التصوف", titleUr="تصوف", sort=6),
+    "rasail": dict(slug="rasail", titleEn="Rasail & Other Works", titleAr="الرسائل", titleUr="رسائل و دیگر تصانیف", sort=7),
     "durood": dict(slug="durood", titleEn="Durood & Wazaif", titleAr="الصلوات والأوراد", titleUr="درود و وظائف", sort=4),
 }
 
@@ -114,6 +119,47 @@ BOOKS = {
         demote_hadith=False,
     ),
 }
+
+# ── Bulk addition: data-extracted/bulk-addition/<folder>/ = one volume-less book each, all by Imam Ahmed Raza Khan ──
+BULK_DIR = "bulk-addition"
+BULK_AUTHOR = dict(slug="imam-ahmed-raza-khan")  # created by the Fatawa Radawiyyah seed; only referenced here
+MEDIA_URL = "/media"  # data-extracted/bulk-addition/Images/ -> apps/web/public/media/ (scripts/copy_media.py)
+# key: (folder, slug, category, titleEn, titleAr, titleUr, languages)
+_BULK = [
+    ("Al-Fadl-Ul-Maouhabi", "al-fadl-ul-mauhabi", "hadith", "Al Fadl ul Mauhabi", "الفضل الموهبي في معنى إذا صح الحديث فهو مذهبي", "الفضل الموہبی فی معنیٰ اذا صح الحدیث فھو مذہبی", ["ar", "ur"]),
+    ("Al-Taleeq-Ur-Razavi-Alaa Saheeh-Ul-Bukhari", "al-taleeq-ur-razavi", "hadith", "Al Taleeq ur Razavi ala Sahih il Bukhari", "التعليق الرضوي على صحيح البخاري", "التعلیق الرضوی علیٰ صحیح البخاری", ["ar"]),
+    ("Al-Zamzama-Tul-Qamariyya", "al-zamzama-tul-qamariyya", "rasail", "Al Zamzama tul Qamariyya", "الزمزمة القمرية في الذب عن الحمرة الغبرية", "الزمزمۃ القمریۃ فی الذب عن الحمرۃ الغبریۃ", ["ar"]),
+    ("Alijazat-Ul-Mateena", "al-ijazat-ul-mateena", "rasail", "Al Ijazat ul Mateena li Ulama Bakkata wal Madeena", "الإجازات المتينة لعلماء بكة والمدينة", "الاجازات المتینۃ لعلماء بکۃ والمدینۃ", ["ar"]),
+    ("Dus Aqeeday", "dus-aqeeday", "aqaid", "Dus Aqeeday", "عشر عقائد", "دس عقیدے", ["ur"]),
+    ("Eedain-Me-Gale-Milna", "eedain-me-gale-milna", "fatawa", "Eedain Me Gale Milna", "المعانقة في العيدين", "عیدین میں گلے ملنا", ["ar", "ur"]),
+    ("Eimaan-Ki-Pehchan", "eimaan-ki-pehchan", "aqaid", "Eimaan Ki Pehchan", "معرفة الإيمان", "ایمان کی پہچان", ["ur"]),
+    ("Faizan e Ilm o Ulama", "faizan-e-ilm-o-ulama", "rasail", "Faizan e Ilm o Ulama", "فيضان العلم والعلماء", "فیضانِ علم و علماء", ["ur"]),
+    ("Fazail-e-Duaa", "fazail-e-duaa", "durood", "Fazail e Duaa", "فضائل الدعاء", "فضائلِ دعا", ["ar", "ur"]),
+    ("Iqamat-Ul-Qiyyamat", "iqamat-ul-qiyamat", "aqaid", "Iqamat ul Qiyamat ala Taan il Qiyam li Nabi Tihamat", "إقامة القيامة على طاعن القيام لنبي تهامة", "اقامۃ القیامۃ علیٰ طاعن القیام لنبی تہامۃ", ["ar", "ur"]),
+    ("Izhar-Ul-Haq-Al-Jalee", "izhar-ul-haq-al-jali", "aqaid", "Izhar ul Haq al Jali", "إظهار الحق الجلي", "اظہار الحق الجلی", ["ur"]),
+    ("Kiflul-Faqeeh", "kifl-ul-faqeeh", "fatawa", "Kifl ul Faqeeh il Fahim fi Ahkam i Qirtas id Darahim", "كفل الفقيه الفاهم في أحكام قرطاس الدراهم", "کفل الفقیہ الفاھم فی احکام قرطاس الدراھم", ["ar"]),
+    ("Kiflul-Faqeeh-Urdu", "kifl-ul-faqeeh-urdu", "fatawa", "Kifl ul Faqeeh il Fahim (Urdu Translation)", "كفل الفقيه الفاهم (ترجمة أردية)", "کفل الفقیہ الفاھم (اردو ترجمہ)", ["ur", "ar"]),
+    ("Malfoozat-e-Aala-Hazrat", "malfoozat-e-aala-hazrat", "rasail", "Malfoozat e Aala Hazrat", "ملفوظات أعلى حضرت", "ملفوظاتِ اعلیٰ حضرت", ["ur"]),
+    ("Olaad-k-Huqooq", "olaad-ke-huqooq", "fatawa", "Olaad ke Huqooq", "حقوق الأولاد", "اولاد کے حقوق", ["ur"]),
+    ("Ourtain-Aur-Mazarat-Ki-Haziri", "auratain-aur-mazarat-ki-haziri", "fatawa", "Auratain aur Mazarat ki Haziri", "النساء وزيارة المزارات", "عورتیں اور مزارات کی حاضری", ["ur"]),
+    ("Rahy-Khuda-Mai-Khrj-Kar-Ny-Ky-Fazail", "rah-e-khuda-me-kharch-ke-fazail", "fatawa", "Rah e Khuda me Kharch karne ke Fazail", "فضائل الإنفاق في سبيل الله", "راہِ خدا میں خرچ کرنے کے فضائل", ["ur"]),
+    ("Shriat-o-Tariqat", "shariat-o-tariqat", "tasawwuf", "Shariat o Tariqat", "الشريعة والطريقة", "شریعت و طریقت", ["ur"]),
+    ("Suboot-e-Hilaal-k-Tareeqay", "suboot-e-hilal-ke-tareeqay", "fatawa", "Suboot e Hilal ke Tareeqay", "طرق ثبوت الهلال", "ثبوتِ ہلال کے طریقے", ["ur", "ar"]),
+    ("Waliden-Zoujen-Aur-Asaatiza-k-Huqooq", "walidain-zaujain-asatiza-ke-huqooq", "fatawa", "Walidain, Zaujain aur Asatiza ke Huqooq", "حقوق الوالدين والزوجين والأساتذة", "والدین، زوجین اور اساتذہ کے حقوق", ["ur", "ar"]),
+    ("Wilayat ka Aasan Rasta Tasawwur-e-Shaikh", "wilayat-ka-aasan-rasta", "tasawwuf", "Wilayat ka Aasan Rasta (Tasawwur e Shaikh)", "الطريق السهل إلى الولاية (تصور الشيخ)", "ولایت کا آسان راستہ (تصورِ شیخ)", ["ur"]),
+    ("al-wazifa tul karima", "al-wazifa-tul-karima", "durood", "Al Wazifa tul Karima", "الوظيفة الكريمة", "الوظیفۃ الکریمہ", ["ur", "ar"]),
+    ("huqoq ul ibad kesay maaf hon", "huqooq-ul-ibad-kaise-maaf-hon", "fatawa", "Huqooq ul Ibad Kaise Maaf Hon", "كيف تُعفى حقوق العباد", "حقوق العباد کیسے معاف ہوں", ["ur"]),
+    ("isma-e-arbaeen", "isma-e-arbaeen", "fatawa", "Isma e Arbaeen", "اسماء الأربعين", "اسماءِ اربعین", ["ur"]),
+    ("tamheed-ul-eeman", "tamheed-ul-eeman", "aqaid", "Tamheed ul Eeman bi Ayat il Quran", "تمهيد الإيمان بآيات القرآن", "تمہیدِ ایمان بآیاتِ قرآن", ["ar", "ur"]),
+]
+BULK_KEYS = []
+for _f, _slug, _cat, _en, _ar, _ur, _langs in _BULK:
+    _k = "b-" + _slug
+    BULK_KEYS.append(_k)
+    BOOKS[_k] = dict(
+        dir=f"{BULK_DIR}/{_f}", author=BULK_AUTHOR, category=_cat, volumes=None, demote_hadith=False, media=True, demote_collisions=True,
+        book=dict(slug=_slug, titleEn=_en, titleAr=_ar, titleUr=_ur, languages=json.dumps(_langs), published=1),
+    )
 
 NO_VOLUME = ""  # pseudo volume slug of volume-less books (out/<book>/_/, chapters.volumeId = NULL)
 

@@ -27,7 +27,6 @@ export function ChapterArticle({ book, bookTitle, authorName, chapter, part = 1,
       // The NATIVE replaceState on purpose: Next patches history.replaceState on the instance to sync its router, which
       // re-renders the page (blank chapters, scroll reset). Only the address bar should change here.
       if (location.pathname !== url) { try { History.prototype.replaceState.call(history, history.state, "", url) } catch {} }
-      document.title = `${titleOf(chapter)} · ${bookTitle}`
     }, { rootMargin: "-30% 0px -69% 0px" })
     io.observe(el)
     return () => io.disconnect()

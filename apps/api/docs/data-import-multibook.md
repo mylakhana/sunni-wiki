@@ -36,3 +36,11 @@ miraat 288 chapters / 99 with content; faizan 6046 / 278; siraat 3472 / 161. No 
 
 ## Book 06 — Dalail ul Khairat (volume-less)
 `volumes=None` in `config.BOOKS`: files sit directly in `data-extracted/06 Dalail ul Khairat/`; no Volume rows, `chapters.volumeId = NULL`, output in `out/dalail-ul-khairat/_/`, chapter slugs = IndexNo (`1.01`). Same RTF-per-page format as Siraat (335 pages -> 22 TOC chapters + front matter, parity OK). Run: `python3 scripts/import_all.py --skip-seed --book dalail`. New category `durood`.
+
+## Bulk addition (`data-extracted/bulk-addition/`, 26 books by Imam Ahmed Raza Khan)
+Each sub-folder = one volume-less book (`volumes=None`), author = existing `imam-ahmed-raza-khan` (the Fatawa seed must have run first). Book list/titles/slugs/categories: `config._BULK` (keys `b-<slug>`). Run: `python3 scripts/import_all.py --skip-seed --book bulk` (copy_media -> seed -> build -> import for all 26).
+- Handles both families: RTF-page books (Dus Aqeeday, ...) and h/u/a/s/q/t-coded books through the same pipeline; `i` rows = page images -> `<figure><graphic url="/media/<file>"/>`.
+- `Images/` (shared by several books) is copied by `scripts/copy_media.py` to `apps/web/public/media/` (not renamed per book).
+- `demote_collisions`: a TOC entry resolving to the same paragraph as an earlier chapter becomes a sub-topic (anchor) of it instead of an empty chapter.
+- New categories: `fatawa` (same row as the Fatawa seed), `aqaid`, `tasawwuf`, `rasail`, `durood`.
+- Known gaps: **Malfoozat-e-Aala-Hazrat** text export stops at 5000 rows (pages 1-539 of ~800), so most of its TOC has no text; `Images/Jad-Ul-Mum-Tar-jild-2-(125).gif` belongs to no book here (copied, unreferenced).

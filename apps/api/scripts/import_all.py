@@ -3,7 +3,7 @@
 
 Run (from apps/api):
     python3 scripts/import_all.py                    # all books
-    python3 scripts/import_all.py --book bahar       # only one: fatawa | bahar | miraat | faizan | siraat | dalail
+    python3 scripts/import_all.py --book bahar       # only one: fatawa | bahar | miraat | faizan | siraat | dalail | bulk
     python3 scripts/import_all.py --skip-seed        # skip the "pnpm db:seed" step
 
 Steps per book: seed (scoped clean + volumes) -> build (CSV -> TEI JSON) -> import (DB).
@@ -54,6 +54,19 @@ BOOKS = {
         ([PY, "scripts/import_books.py", "--book", "dalail", "--all"], API),
     ],
 }
+
+
+# books of data-extracted/bulk-addition/ (all by Imam Ahmed Raza Khan, volume-less, share one Images/ -> web/public/media)
+sys.path.insert(0, str(SCRIPTS))
+from multibook import config as _cfg  # noqa: E402
+
+_BULK_FLAGS = [f for k in _cfg.BULK_KEYS for f in ("--book", k)]
+BOOKS["bulk"] = [
+    ([PY, "scripts/copy_media.py"], API),
+    ([PY, "scripts/seed_books.py", *_BULK_FLAGS], API),  # needs the Fatawa seed first (author imam-ahmed-raza-khan)
+    ([PY, "-m", "multibook.build", *_BULK_FLAGS, "--all"], SCRIPTS),
+    ([PY, "scripts/import_books.py", *_BULK_FLAGS, "--all"], API),
+]
 
 
 def run(cmd: list[str], cwd: Path) -> None:

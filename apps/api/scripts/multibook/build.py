@@ -31,6 +31,7 @@ import sys
 import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
+from urllib.parse import quote
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
@@ -111,7 +112,7 @@ def build_toc(index_rows: list[dict], demote_hadith: bool, rep: dict) -> list[di
 
 
 # ── text rows -> elements ────────────────────────────────────────────────────
-def load_elements(folder: Path, rep: dict) -> list[dict]:
+def load_elements(folder: Path, rep: dict, media: bool = False) -> list[dict]:
     path = folder / "TextContainer.csv"
     raw = read_csv(path) if path.exists() else []
     rows = []
@@ -121,6 +122,9 @@ def load_elements(folder: Path, rep: dict) -> list[dict]:
         page = int(pg_s) if pg_s.lstrip("-").isdigit() else 0
         code_raw = (r["TextP"] or "").strip().lower()
         text = r["Description"] or ""
+        if code_raw == "i" and media:  # page image (bulk books): file lives in apps/web/public/media/
+            rows.append({"page": page, "code": "i", "text": text})
+            continue
         if text.lstrip().startswith("{\\rtf"):
             code = "w"
         else:
@@ -165,7 +169,9 @@ def load_elements(folder: Path, rep: dict) -> list[dict]:
     rep.update(rows=len(rows), front_rows=len(front), pages_clamped=fixed, remaps=dict(remaps))
     elements = []
     for ri, r in enumerate(rows):
-        if r["code"] == "w":
+        if r["code"] == "i":
+            xmls = [f'<figure><graphic url="{config.MEDIA_URL}/{tei.esc(quote(r["text"].strip().split("/")[-1].split(chr(92))[-1]))}"/></figure>']
+        elif r["code"] == "w":
             xmls = rtf.rtf_to_tei(r["text"])
         elif r["code"] == "r":
             lines = [tei.clean(l) for l in re.split(r"[\r\n]+", r["text"]) if tei.clean(l)]
@@ -238,7 +244,7 @@ def build_volume(book: str, slug: str, folder: Path, report: dict) -> list[dict]
     cfg = config.BOOKS[book]
     rep = report["volumes"][slug] = {"duplicate_index_no": []}
     toc = build_toc(read_csv(folder / "IndexContainer.csv"), cfg["demote_hadith"], rep)
-    els = load_elements(folder, rep)
+    els = load_elements(folder, rep, cfg.get("media", False))
     rep["toc_nodes"] = len(toc)
     out: list[dict] = []
     sib: Counter = Counter()
@@ -256,6 +262,15 @@ def build_volume(book: str, slug: str, folder: Path, report: dict) -> list[dict]
         if n["no"] in placed and placed[n["no"]][0] not in starts:
             starts[placed[n["no"]][0]] = n["no"]
     rep["chapter_collisions"] = [n["no"] for n in chapters if n["no"] in placed and starts.get(placed[n["no"]][0]) != n["no"]]
+    if cfg.get("demote_collisions"):
+        # bulk books: a TOC entry that lands on the same paragraph as an earlier chapter (finer-grained TOC than the
+        # text can resolve) becomes a sub-topic (anchor) of the chapter that owns that paragraph, so nothing is lost.
+        col = set(rep["chapter_collisions"])
+        for n in chapters:
+            if n["no"] in col:
+                n["level"], n["parent"] = 3, None
+        rep["chapters_demoted"] = len(col)
+        chapters = [n for n in chapters if n["no"] not in col]
     rep["chapters_unplaced"] = [n["no"] for n in chapters if n["no"] not in placed]
     order = sorted(starts)
     ends = dict(zip(order, order[1:] + [len(els)]))
@@ -329,7 +344,7 @@ def build_book(book: str, wanted: list[str] | None, dry: bool, data_root: Path =
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--book", choices=list(config.BOOKS))
+    ap.add_argument("--book", choices=list(config.BOOKS), action="append", default=[])
     ap.add_argument("--all-books", action="store_true")
     ap.add_argument("--all", action="store_true", help="all volumes of --book")
     ap.add_argument("--volume", action="append", default=[])
@@ -342,7 +357,8 @@ def main() -> None:
         return
     if not a.book or not (a.all or a.volume):
         ap.error("pass --all-books, or --book with --all/--volume")
-    build_book(a.book, None if a.all else a.volume, a.dry_run, a.data_root)
+    for b in a.book:
+        build_book(b, None if a.all else a.volume, a.dry_run, a.data_root)
 
 
 if __name__ == "__main__":

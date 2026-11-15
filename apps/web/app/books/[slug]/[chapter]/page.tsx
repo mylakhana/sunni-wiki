@@ -15,8 +15,8 @@ type Props = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug, chapter } = await params
   const [b, c] = await Promise.all([getBook(slug).catch(() => null), getChapter(slug, chapter).catch(() => null)])
-  if (!b || !c) return { title: "Chapter" }
-  const title = `${titleOf(c)} · ${b.title}`
+  if (!b || !c) return { title: "Book" }
+  const title = b.title
   const description = `Read ${titleOf(c)} from ${b.title} by ${b.authorName}.`
   return { title, description, openGraph: { title, description, type: "article" }, twitter: { card: "summary", title, description } }
 }

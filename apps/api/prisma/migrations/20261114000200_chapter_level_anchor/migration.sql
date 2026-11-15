@@ -1,3 +1,0 @@
--- AlterTable
-ALTER TABLE `chapters` ADD COLUMN `level` INTEGER NOT NULL DEFAULT 1,
-    ADD COLUMN `anchorId` VARCHAR(150) NULL;

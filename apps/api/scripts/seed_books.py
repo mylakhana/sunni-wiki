@@ -22,7 +22,14 @@ from seed_fatawa_razawiyyah import connect, load_database_url, upsert  # noqa: E
 def seed_book(conn, book: str) -> None:
     cfg = config.BOOKS[book]
     with conn.cursor() as cur:
-        author_id = upsert(cur, "authors", "slug", cfg["author"])
+        if len(cfg["author"]) == 1:  # reference to an author created by an earlier book's seed (bulk books)
+            cur.execute("SELECT id FROM authors WHERE slug=%s", (cfg["author"]["slug"],))
+            row = cur.fetchone()
+            if not row:
+                sys.exit(f"{book}: author {cfg['author']['slug']!r} missing — seed Fatawa Radawiyyah first")
+            author_id = row[0]
+        else:
+            author_id = upsert(cur, "authors", "slug", cfg["author"])
         category_id = upsert(cur, "categories", "slug", config.CATEGORIES[cfg["category"]])
         book_id = upsert(cur, "books", "slug", {**cfg["book"], "authorId": author_id, "categoryId": category_id,
                                                 "updatedAt": datetime.now(timezone.utc).replace(tzinfo=None)})
