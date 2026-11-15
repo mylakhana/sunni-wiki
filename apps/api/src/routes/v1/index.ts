@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import aiRoute from "./ai.js"
 import authorsRoute from "./authors.js"
 import booksRoute from "./books.js"
 import categoriesRoute from "./categories.js"
@@ -9,4 +10,5 @@ export default async function v1Routes(app: FastifyInstance) {
   await app.register(categoriesRoute)
   await app.register(authorsRoute)
   await app.register(booksRoute)
+  await app.register(aiRoute)
 }

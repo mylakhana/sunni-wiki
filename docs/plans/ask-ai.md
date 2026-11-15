@@ -58,3 +58,18 @@ Everything real **except** the AI call and the final system prompt:
 | X1 | `docs/sunniwiki-concept/README.md`: Ask-AI flow, context = cached Markdown, caps, storage choices | done |
 | X2 | `apps/api/docs/api-structure.md`: new endpoints and the Markdown format spec (what each TEI element becomes) | done |
 | X3 | `apps/api/scripts/README.md`: backfill script and run order | done |
+
+## Local Ollama chat (added 2026-11-15) — done
+
+- The chat panel (`apps/web/components/library/ask-ai-chat.tsx`, client `lib/ollama.ts`) talks directly from the user's browser to their own Ollama (`http://localhost:11434/api/chat`). Nothing goes through our servers; the user types the model name and toggles Thinking (`think` flag). Settings persist in localStorage (`ollama`).
+- Sent: one `system` message (= `buildContext().text`: system prompt + all selected texts), the chat history, then the question. `options.num_ctx` is sized from the estimate (Ollama's 4096 default would silently truncate the context).
+- Streaming NDJSON; `message.thinking` renders as a collapsible ChatGPT-style "Thinking… / Thought for Ns" block; `message.content` renders as GFM Markdown (`react-markdown` + `remark-gfm`, no raw HTML).
+- Token usage: estimate bar (system / context / history / question, `ceil(chars/3)`) before sending; actual `prompt_eval_count` / `eval_count` shown after each reply.
+- Requirement for users: Ollama must allow the site origin (`OLLAMA_ORIGINS`); the panel shows this hint and on connection failure.
+
+## Server AI provider (added 2026-11-15) — done
+
+- `apps/api/.env.example`: `AI_PROVIDER` (deepseek), `AI_MODEL`, `AI_API_KEY`, `AI_BASE_URL?`, `AI_CONTEXT_TOKENS`. Add providers in `apps/api/src/services/ai.service.ts` (+ enum in `config/env.ts`).
+- API: `GET /v1/ai/config`, `POST /v1/ai/chat` (streams NDJSON normalized to the Ollama shape; rate-limited 30/min; aborts the provider call when the client leaves). Web: `/api/ai/config` and `/api/ai/chat` proxies.
+- Web: server AI is the default; ⋮ menu (Clear history / Use local AI) switches to Ollama (`settings.local`, localStorage `ollama`).
+- Known gap: the API rate limit is keyed by IP and every request arrives from the Next server, so the 30/min limit is shared by all users. Forward the client IP (`trustProxy` + `x-forwarded-for`) before launch.

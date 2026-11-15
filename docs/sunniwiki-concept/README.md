@@ -30,7 +30,10 @@ A free, public library of trusted Islamic books, readable in Arabic, Urdu and En
   - **Context view == AI payload:** the context view renders the cached Markdown through the same assembly function that will build the AI request.
   - State: URL `?ai=1&ctx=<unit ids>` restores the selection on refresh/share (missing/stale Markdown refetched, invalid ids dropped). Chat history lives in `sessionStorage` (cleared with "Clear history").
   - Why not cookies: ~4 KB limit and sent with every request; chapter Markdown can be hundreds of KB.
-  - Still dummy (`TODO(ai)`): the AI call/reply, the system prompt and the provider/model strip.
+  - **Chat** (`components/library/ask-ai-chat.tsx`): streams the reply, ChatGPT-style collapsible thinking, GFM Markdown, one-line token usage + % of the context window.
+  - **Provider:** by default the server's OpenAI-compatible provider, configured in `apps/api/.env` (`AI_PROVIDER` = deepseek, `AI_MODEL`, `AI_API_KEY`, optional `AI_BASE_URL`, `AI_CONTEXT_TOKENS`). The key never leaves the API: browser -> Next `/api/ai/chat` (stream proxy) -> API `POST /v1/ai/chat` -> provider; `GET /v1/ai/config` reports provider/model/window (no key). Without a key the UI tells the user to use local AI. Reasoning (`reasoning_content`) is shown when the model emits it (e.g. a reasoner model); the Thinking toggle is local-only.
+  - **Local override:** the chat's ⋮ menu has "Clear history" and "Use local AI (Ollama)". Local mode talks browser -> `localhost:11434` directly (model name, Thinking toggle, window cap, `OLLAMA_ORIGINS` required); nothing goes through our servers.
+  - Still dummy (`TODO(ai)`): the final system prompt text.
 - **Decisions:** in-book full-text search is dropped for now (title filter only); no reading-progress percentage (API has no total chapter count).
 
 ## Known gaps

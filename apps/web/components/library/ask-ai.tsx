@@ -2,19 +2,16 @@
 
 /**
  * Ask AI about this. Real: context picker (lazy contents tree in selection mode), Markdown fetch + IndexedDB cache,
- * context view (rendered from buildContext), URL/session restore. Still dummy (TODO(ai)): system prompt, AI reply, provider strip.
+ * context view (rendered from buildContext), URL/session restore. The chat itself lives in ask-ai-chat.tsx (local Ollama).
  * Flow: pick context (left panel) -> fetch + cache -> chat panel (right) + context view (main).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { AI_MAX_CHARS, buildContext, fmt, loadContext, tokensOf, type Target, type UnitStatus } from "@/lib/ai-context"
+import { AI_MAX_CHARS, buildContext, fmt, loadContext, tokensOf, type BuiltContext, type Target, type UnitStatus } from "@/lib/ai-context"
 import { getMany, prune, type CachedUnit } from "@/lib/ai-context-cache"
 import { titleOf, type Volume } from "@/lib/types"
 import { Markdown } from "./ask-ai-markdown"
 import { ChapterBrowser } from "./chapter-browser"
 import { useContextSelection } from "./context-select"
-
-// TODO(ai): dummy provider strip; real values come from server config.
-const AI_INFO = { provider: "Anthropic", model: "Claude Sonnet 5.5", effort: "Medium" }
 
 const btn = "h-9 rounded-full px-4 text-sm font-medium"
 const SPARKLE = <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l1.8 4.7L15.5 10.5l-4.7 1.8L9 17l-1.8-4.7L2.5 10.5l4.7-1.8L9 4zM18 3v4M16 5h4M18 15v4M16 17h4" /></svg>
@@ -115,7 +112,7 @@ export function AskAiPicker({ book, volumes, active, openVolume, openPath, onCan
  * `fresh`: the picker just fetched everything, so use the cache as is; otherwise (refresh / shared link) revalidate everything with a progress state.
  * `onResolved` reports the ids that really exist (404s dropped) once the context is ready.
  */
-export function AskAiContext({ book, authorPrompt, ids, fresh, onExit, onResolved }: { book: string; authorPrompt?: string | null; ids: string[]; fresh: boolean; onExit: () => void; onResolved: (ids: string[]) => void }) {
+export function AskAiContext({ book, authorPrompt, ids, fresh, onExit, onResolved, onContext }: { book: string; authorPrompt?: string | null; ids: string[]; fresh: boolean; onExit: () => void; onResolved: (ids: string[]) => void; onContext: (ctx: BuiltContext) => void }) {
   const [units, setUnits] = useState<CachedUnit[] | null>(null)
   const targets = useMemo<Target[]>(() => ids.map((id) => ({ id })), [ids])
   const loader = useContextLoader(book)
@@ -148,6 +145,7 @@ export function AskAiContext({ book, authorPrompt, ids, fresh, onExit, onResolve
   }, [loader.status])
 
   const ctx = useMemo(() => (units ? buildContext(units, authorPrompt) : null), [units, authorPrompt])
+  useEffect(() => { if (ctx) onContext(ctx) }, [ctx, onContext])
   const exitRow = (text: string, sub?: string) => (
     <div className="card flex items-center justify-between gap-3 px-5 py-3" style={{ background: "color-mix(in srgb, #ef4444 14%, var(--lib-surface))" }}>
       <div><p className="c-muted text-xs">{text}</p>{sub && <p className="c-muted num text-[11px]">{sub}</p>}</div>
@@ -183,61 +181,6 @@ export function AskAiContext({ book, authorPrompt, ids, fresh, onExit, onResolve
           <Markdown md={sec.markdown} prefix={`u${sec.id}`} />
         </article>
       ))}
-    </div>
-  )
-}
-
-type Msg = { role: "user" | "ai"; text: string }
-
-/** Right-hand chat panel. Nothing is "sent" until the user's first prompt. */
-export function AskAiChat({ count, storageKey, onExit }: { count: number; storageKey: string; onExit: () => void }) {
-  // chat history survives a refresh (sessionStorage = temporary, per tab)
-  const [msgs, setMsgs] = useState<Msg[]>(() => {
-    try { return JSON.parse(sessionStorage.getItem(storageKey) ?? "[]") as Msg[] } catch { return [] }
-  })
-  useEffect(() => { try { sessionStorage.setItem(storageKey, JSON.stringify(msgs)) } catch {} }, [storageKey, msgs])
-  const [draft, setDraft] = useState("")
-  const [busy, setBusy] = useState(false)
-  const endRef = useRef<HTMLDivElement>(null)
-  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }) }, [msgs, busy])
-
-  // TODO(ai): dummy reply below; the real AI call (system prompt + cached context + question) replaces this timeout.
-  const send = () => {
-    const text = draft.trim()
-    if (!text || busy) return
-    setMsgs((m) => [...m, { role: "user", text }])
-    setDraft("")
-    setBusy(true)
-    setTimeout(() => { setMsgs((m) => [...m, { role: "ai", text: "This is a dummy reply. In the real feature the system prompt, the cached context and your question are sent to the AI now — for the first time — and the answer streams here with citations." }]); setBusy(false) }, 900)
-  }
-
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="bd-line flex items-center justify-between gap-2 border-b p-3">
-        <div>
-          <h2 className="flex items-center gap-1.5 text-sm font-semibold"><svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l1.8 4.7L15.5 10.5l-4.7 1.8L9 17l-1.8-4.7L2.5 10.5l4.7-1.8L9 4zM18 3v4M16 5h4M18 15v4M16 17h4" /></svg> SunniWiki AI</h2>
-          <p className="c-muted text-[11px]">{count} items as context</p>
-        </div>
-        {msgs.length > 0 && !busy && (
-          <button onClick={() => setMsgs([])} className="c-muted rounded-full px-3 py-1.5 text-xs font-medium hover:bg-(--lib-accent-soft)" style={{ background: "var(--lib-line)" }}>Clear history</button>
-        )}
-      </div>
-      <p className="bd-line c-muted border-b px-3 py-2 text-[11px]" aria-label="AI settings">
-        {AI_INFO.provider} | {AI_INFO.model} | Thinking: {AI_INFO.effort}
-      </p>
-      <div className="flex-1 space-y-3 overflow-y-auto p-3">
-        {msgs.length === 0 && <p className="c-muted rounded-xl p-3 text-xs leading-relaxed" style={{ background: "var(--lib-line)" }}>Your context is loaded. Nothing has been sent to the AI yet — ask your first question below.</p>}
-        {msgs.map((m, i) => (
-          <div key={i} className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${m.role === "user" ? "bg-lib-accent ml-auto text-white" : ""}`} style={m.role === "ai" ? { background: "var(--lib-line)" } : undefined}>{m.text}</div>
-        ))}
-        {busy && <p className="c-muted text-xs" role="status">Thinking…</p>}
-        <div ref={endRef} />
-      </div>
-      <form onSubmit={(e) => { e.preventDefault(); send() }} className="bd-line flex items-end gap-2 border-t p-3">
-        <textarea value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send() } }}
-          rows={2} placeholder="Ask about the selected texts…" aria-label="Message" className="bg-lib-bg min-h-10 flex-1 resize-none rounded-xl px-3 py-2 text-sm outline-none" />
-        <button type="submit" disabled={!draft.trim() || busy} className={`${btn} bg-lib-accent text-white disabled:opacity-40`}>Send</button>
-      </form>
     </div>
   )
 }
