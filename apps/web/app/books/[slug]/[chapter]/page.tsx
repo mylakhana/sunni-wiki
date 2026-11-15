@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation"
 import { Suspense } from "react"
 import { ChapterArticle } from "@/components/library/chapter-article"
 import { getBook, getChapter } from "@/lib/api/library"
-import { partOfAnchor, TeiContent } from "@/lib/tei/render"
+import { ChapterStream } from "@/components/library/chapter-stream"
+import { isLongTei, partOfAnchor, TeiContent } from "@/lib/tei/render"
 import { titleOf } from "@/lib/types"
 
 type Props = {
@@ -43,13 +44,16 @@ async function ChapterView({ params, searchParams }: Props) {
   const { tei, ...meta } = chapter
 
   return (
-    <ChapterArticle book={book.id} bookTitle={book.title} authorName={book.authorName} chapter={meta} part={part}>
+    <>
+    <ChapterArticle book={book.id} bookTitle={book.title} authorName={book.authorName} chapter={meta} part={part} plain={!isLongTei(tei ?? "")}>
       {tei && tei.trim() ? (
         <TeiContent tei={tei} part={part} book={slug} chapter={chapterSlug} titles={[meta.ur, meta.ar, meta.en].filter((x): x is string => !!x)} />
       ) : (
         <p className="blk-note">This section has no text of its own. Choose a sub-section from the contents.</p>
       )}
     </ChapterArticle>
+    <ChapterStream book={book.id} bookTitle={book.title} authorName={book.authorName} current={meta.slug} from={meta.next?.slug ?? null} />
+    </>
   )
 }
 

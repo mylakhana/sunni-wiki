@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { createContext, useContext, useEffect, useRef, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import type { BuiltContext } from "@/lib/ai-context"
 import { saveLastRead, store } from "@/lib/store"
 import { titleOf, type BookDetail, type ChapterDetail } from "@/lib/types"
@@ -18,7 +18,7 @@ import "./reader.css"
 
 type Tab = "contents" | "about"
 export type Meta = Omit<ChapterDetail, "tei">
-type Current = { chapter: Meta; part: number }
+type Current = { chapter: Meta; part: number; scroll?: boolean } // scroll: became current by scrolling (do not reset/restore the scroll position)
 /** Lets the (per-chapter) page content tell the persistent shell which chapter is showing. */
 const ShellCtx = createContext<((c: Current) => void) | null>(null)
 export const useSetCurrentChapter = () => useContext(ShellCtx)
@@ -34,7 +34,15 @@ export const clip = (t: string, n = 40) => (t.length > n ? t.slice(0, n).trimEnd
 
 /** Shell around ONE chapter: toolbar, contents sidebar, preferences. `children` is the server-rendered chapter text. */
 export function ReaderShell({ book, children }: { book: BookDetail; children: React.ReactNode }) {
-  const [cur, setCur] = useState<Current | null>(null)
+  const [cur, setCurState] = useState<Current | null>(null)
+  const curRef = useRef<Current | null>(null)
+  const byScroll = useRef(false)
+  const setCur = useCallback((c: Current) => {
+    if (c.scroll && curRef.current?.chapter.slug === c.chapter.slug) return
+    curRef.current = c
+    byScroll.current = !!c.scroll
+    setCurState(c)
+  }, [])
   const chapter = cur?.chapter ?? null
   const part = cur?.part ?? 1
   const router = useRouter()
@@ -90,6 +98,7 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
   useEffect(() => {
     if (!chapter) return
     saveLastRead({ book: book.id, vol: volume?.slug ?? null, ch: chapter.slug, title: chTitle })
+    if (byScroll.current) return // reached by scrolling down the stream: keep the position
     const pos = store.get<{ ch?: string; off?: number } | null>(`pos:${book.id}`, null)
     if (window.location.hash) return // jumping to a sub-topic anchor: handled by the hash effect below
     if (pos?.ch === posKey && typeof pos.off === "number") {
@@ -145,7 +154,7 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
       const p = (window.scrollY - top + 150) / Math.max(1, m.offsetHeight - window.innerHeight + 150)
       barRef.current.style.transform = `scaleX(${Math.min(1, Math.max(0, p))})`
       clearTimeout(t)
-      t = setTimeout(() => store.set(`pos:${book.id}`, { ch: posKey, off: Math.round(window.scrollY) }), 400)
+      if (!byScroll.current) t = setTimeout(() => store.set(`pos:${book.id}`, { ch: posKey, off: Math.round(window.scrollY) }), 400)
     }
     const on = () => { if (!raf) raf = requestAnimationFrame(update) }
     window.addEventListener("scroll", on, { passive: true })
@@ -243,7 +252,9 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
                 <div className="mx-auto w-28"><BookCover book={book} /></div>
                 <h2 className="mt-5 text-center text-lg font-semibold">{book.title}</h2>
                 <Link href={`/authors/${book.author}`} className="c-accent block text-center text-sm">{book.authorName}</Link>
-                {book.blurb && <p className="c-muted mt-4 text-sm leading-relaxed">{book.blurb}</p>}
+                {book.blurb && (/[؀-ۿ]/.test(book.blurb)
+                  ? <p dir="rtl" lang="ur" className="c-muted font-ur mt-4 whitespace-pre-line text-right text-base leading-[2.2]">{book.blurb}</p>
+                  : <p className="c-muted mt-4 text-sm leading-relaxed">{book.blurb}</p>)}
                 <dl className="mt-5 text-sm">
                   {([
                     ["Topic", <Link key="t" href={`/browse?category=${book.cat}`} className="c-accent">{book.catName}</Link>],

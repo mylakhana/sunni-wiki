@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import the converted Fatawa Razawiyyah chapters (scripts/out/<vol>/chapters.json) into the DB.
+"""Import the converted Fatawa Radawiyyah chapters (scripts/out/<vol>/chapters.json) into the DB.
 
 Run from apps/api, after `python3 scripts/seed_fatawa_razawiyyah.py` and
 `cd scripts && python3 -m fatawa.build --all`:
@@ -82,12 +82,6 @@ def main() -> None:
         raise
     finally:
         conn.close()
-    # Titles are only created here (the seed only makes volumes), so split the booklet
-    # titles (titleAr / titleUr) right after every successful import. Idempotent.
-    subprocess.run(
-        [sys.executable, str(Path(__file__).resolve().parent / "chapters_titles_sync.py"), "--mode", "fix"],
-        check=True,
-    )
     # Fill content.markdown_chars (exact Ask-AI sizes) for the freshly inserted rows (NULL until then).
     subprocess.run(
         ["pnpm", "backfill:markdown"],

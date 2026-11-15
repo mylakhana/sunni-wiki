@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import type { PrismaClient } from "../generated/prisma/client.js"
+import { ACTIVE_CHAPTER } from "./status.js"
 import type { ZipEntry } from "./zip.js"
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -22,7 +23,7 @@ export class ExportService {
         titleAr: true,
         titleUr: true,
         author: { select: { nameEn: true } },
-        volumes: { orderBy: [{ sort: "asc" }, { id: "asc" }], select: { id: true, slug: true, titleEn: true, titleAr: true, titleUr: true } },
+        volumes: { where: { status: "active" }, orderBy: [{ sort: "asc" }, { id: "asc" }], select: { id: true, slug: true, titleEn: true, titleAr: true, titleUr: true } },
       },
     })
     if (!book) throw this.app.httpErrors.notFound("Book not found")
@@ -32,7 +33,7 @@ export class ExportService {
   /** Chapter ids of one volume (or of the volume-less chapters) in reading order: depth-first by sort. */
   private async orderedIds(bookId: number, volumeId: number | null): Promise<number[]> {
     const rows = await this.db.chapter.findMany({
-      where: { bookId, volumeId },
+      where: { bookId, volumeId, ...ACTIVE_CHAPTER },
       select: { id: true, parentId: true, sort: true },
     })
     const kids = new Map<number | null, typeof rows>()

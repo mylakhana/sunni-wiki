@@ -9,14 +9,14 @@ Replace the mock `apps/web/lib/data.ts` with real data from `apps/api` (MySQL vi
 - API endpoints follow best practices (validation, pagination, HTTP caching, compression, errors, rate limiting, OpenAPI docs).
 
 ## Assessment (what exists today)
-- DB: 1 book (Fatawa Razawiyyah, `published = false`), 1 author, 1 category, 31 volumes, 5185 chapters (4970 nested via `parentId`), 4848 content rows. TEI avg ≈ 15 KB, max ≈ 1.8 MB per chapter.
+- DB: 1 book (Fatawa Radawiyyah, `published = false`), 1 author, 1 category, 31 volumes, 5185 chapters (4970 nested via `parentId`), 4848 content rows. TEI avg ≈ 15 KB, max ≈ 1.8 MB per chapter.
 - API: Fastify + Zod + OpenAPI, only `GET /v1/health`. Generated Prisma client was stale (regenerated, `pnpm db:generate`).
 - Web: Next 16.4.5 (read `node_modules/next/dist/docs/` first), 14 files import mock `@/lib/data`: `app/page.tsx`, `app/authors/*`, `app/books/[id]`, `reader.tsx`, `browse-view`, `command-palette`, `book-card`, `book-cover`, `book-progress`, `continue-reading`, `related-books`, `author-avatar`, `block.tsx`. Mock ids are slugs; DB has `slug` on book/author/category/volume/chapter.
 - Gaps between mock UI and DB (need decisions in code): author `color`/`bio`, book `hue`/`blurb`/`added`/`volumes` count → derive (hash of slug for colours, `createdAt` for "added", `_count` for volumes, `description`/`bio` nullable → hide when null). Chapter titles are nullable per language.
 - Concept docs: `docs/sunniwiki-concept/` and `docs/plans/pending-prototypes.md` **do not exist yet** (CLAUDE.md refers to them). Documentation tasks below create them.
 
 ## Decisions to confirm (see end of chat message)
-1. Set Fatawa Razawiyyah `published = true` (API only returns published books).
+1. Set Fatawa Radawiyyah `published = true` (API only returns published books).
 2. Caching = Next.js `use cache` + `cacheLife` (in-memory per web instance), enabling `cacheComponents: true`.
 3. In-book full-text search is dropped for now (it relied on all mock text being in the browser); chapter-title filter only.
 
@@ -25,7 +25,7 @@ Replace the mock `apps/web/lib/data.ts` with real data from `apps/api` (MySQL vi
 |---|------|--------|
 | D1 | Regenerate Prisma client (`pnpm db:generate`) | done |
 | D2 | Migration: indexes for list queries — `books(published, createdAt)`; verify `chapters` sibling ordering index covers TOC query | done |
-| D3 | Set `books.published = true` for Fatawa Razawiyyah in `scripts/seed_fatawa_razawiyyah.py` (keeps import idempotent) and run it | done |
+| D3 | Set `books.published = true` for Fatawa Radawiyyah in `scripts/seed_fatawa_razawiyyah.py` (keeps import idempotent) and run it | done |
 
 ## API (`apps/api`, all under `/v1`, one route file per controller, thin routes / fat services)
 | # | Task | Status |

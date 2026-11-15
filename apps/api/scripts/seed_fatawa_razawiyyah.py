@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create the basic Fatawa Razawiyyah entries: Author, Category, Book, 31 Volumes.
+"""Create the basic Fatawa Radawiyyah entries: Author, Category, Book, 31 Volumes.
 
 Run (from apps/api):  python3 scripts/seed_fatawa_razawiyyah.py [--data-dir DIR] [--dry-run]
 
@@ -38,8 +38,8 @@ AUTHOR = dict(
 )
 CATEGORY = dict(slug="fatawa", titleEn="Fatawa", titleAr="فتاوى", titleUr="فتاویٰ", sort=0)
 BOOK = dict(
-    slug="fatawa-razawiyya",
-    titleEn="Fatawa Razawiyyah",
+    slug="fatawa-radawiyya",
+    titleEn="Fatawa Radawiyyah",
     titleAr="الفتاوى الرضوية",
     titleUr="فتاویٰ رضویہ",
     languages='["ar","ur"]',

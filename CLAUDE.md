@@ -51,7 +51,15 @@ We have a huge collection of data in messy CSV files. It is converted and import
 4. **Clean before import.** The import must delete all previous data (in the affected tables, respecting FK order) before inserting the new data, so re-runs always produce the same result.
 5. Keep all scripts in `apps/api/scripts/`; follow the database rules above (no `migrate dev`/`migrate reset`).
 
-### Fatawa Razawiyyah import notes
+### Fatawa Radawiyyah import notes
 - Source: `data-extracted/01 Fatawa Razaviyya/` (per-volume `IndexContainer.csv`, `Map.csv`, `TextContainer.csv`; `Images/` stays as-is). Details in `apps/api/scripts/README.md`.
 - Run order (from `apps/api`): `python3 scripts/seed_fatawa_razawiyyah.py` → `cd scripts && python3 -m fatawa.build --all` → `python3 scripts/import_fatawa.py --all` (which ends by running `pnpm backfill:markdown` to fill `content.markdown_chars`; run it alone with `pnpm backfill:markdown [--all]`). Full details: `apps/api/docs/data-import-fatawa-razawiyyah.md`.
 - Never modify or move files in `data-extracted/` (incl. `Images/`).
+
+### Multi-book import rules (all books are re-imported; never break an earlier book)
+- Every book has its own scripts: `seed_<book>.py`, `<book>/build.py` (package), `import_<book>.py`, and its own output folder `apps/api/scripts/out/<book-slug>/` (volume slugs like `1`,`2` repeat across books, so never write to a shared `out/<slug>/`).
+- Scripts only touch their own book (look it up by `books.slug`; clean/delete scoped to that `bookId`).
+- Reuse shared code (`fatawa/tei.py`, `fatawa/rtf_decode.py`, DB helpers in `seed_fatawa_razawiyyah.py`) only by **importing it unmodified**. If a new book needs different behaviour (format difference, new TextP codes, different page/TOC linkage) and changing a shared function could alter or misalign an earlier book's output, **copy the code into the new book's package and modify the copy** — never edit shared modules in a way that changes old output.
+- After touching any shared module, rebuild the older books and confirm their `chapters.json` is unchanged.
+- Bahar-e-Shariat (`data-extracted/02 Bahar e Shariyat/`): run from `apps/api`: `python3 scripts/seed_bahar_e_shariat.py` → `cd scripts && python3 -m bahar.build --all` → `python3 scripts/import_bahar.py --all`. Images: `apps/web/public/bahar-e-shariat/`. Details: `apps/api/docs/data-import-bahar-e-shariat.md`.
+- Books 03-05 (Miraat-ul-Manajeeh, Faizan e Riaz ul Saliheen, Siraat ul Jinaan) share one config-driven pipeline in `apps/api/scripts/multibook/` (still scoped per book by `books.slug`, own `out/<slug>/`): `python3 scripts/import_all.py --book miraat|faizan|siraat`. Details: `apps/api/docs/data-import-multibook.md`.

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import type { PrismaClient } from "../generated/prisma/client.js"
 import { breadcrumbOf } from "./breadcrumb.js"
 import { ContextService } from "./context.service.js"
+import { ACTIVE_CHAPTER } from "./status.js"
 import { decodeCursor, paginate } from "./pagination.js"
 
 type Titles = { titleEn: string | null; titleAr: string | null; titleUr: string | null }
@@ -37,9 +38,9 @@ export class ChapterService {
     if (q.volume) {
       const v = await this.db.volume.findUnique({
         where: { bookId_slug: { bookId: book.id, slug: q.volume } },
-        select: { id: true },
+        select: { id: true, status: true },
       })
-      if (!v) throw this.app.httpErrors.notFound("Volume not found")
+      if (!v || v.status !== "active") throw this.app.httpErrors.notFound("Volume not found")
       volumeId = v.id
     }
     const after = decodeCursor(q.cursor)
@@ -47,6 +48,7 @@ export class ChapterService {
       where: {
         bookId: book.id,
         parentId: q.parentId ?? null,
+        ...ACTIVE_CHAPTER,
         ...(volumeId ? { volumeId } : {}),
       },
       orderBy: [{ sort: "asc" }, { id: "asc" }],
@@ -61,7 +63,7 @@ export class ChapterService {
         anchorId: true,
         ...TITLES,
         volume: { select: { slug: true } },
-        _count: { select: { children: true } },
+        _count: { select: { children: { where: { status: "active" } } } },
       },
     })
     const page = paginate(rows, q.limit)
@@ -69,7 +71,7 @@ export class ChapterService {
     const bookletIds = page.data.filter((c) => c.level === 1).map((c) => c.id)
     const withChapters = new Set<number>()
     if (bookletIds.length) {
-      const g = await this.db.chapter.groupBy({ by: ["parentId"], where: { parentId: { in: bookletIds }, level: 2 }, _count: { _all: true } })
+      const g = await this.db.chapter.groupBy({ by: ["parentId"], where: { parentId: { in: bookletIds }, level: 2, status: "active" }, _count: { _all: true } })
       for (const x of g) if (x.parentId != null) withChapters.add(x.parentId)
     }
     const sizes = await this.sizes.forBook(book.id)
@@ -89,9 +91,9 @@ export class ChapterService {
     const hit = this.orderCache.get(bookId)
     if (hit && Date.now() - hit.at < ORDER_TTL_MS) return hit
     const [volumes, chapters, withContent] = await Promise.all([
-      this.db.volume.findMany({ where: { bookId }, select: { id: true, sort: true } }),
+      this.db.volume.findMany({ where: { bookId, status: "active" }, select: { id: true, sort: true } }),
       this.db.chapter.findMany({
-        where: { bookId },
+        where: { bookId, ...ACTIVE_CHAPTER },
         select: { id: true, slug: true, sort: true, parentId: true, volumeId: true, ...TITLES },
       }),
       this.db.content.findMany({ where: { chapter: { bookId } }, select: { chapterId: true } }),
@@ -133,7 +135,7 @@ export class ChapterService {
   private async firstChapterUnder(groupId: number, depth = 0): Promise<string | null> {
     if (depth > 6) return null
     const kids = await this.db.chapter.findMany({
-      where: { parentId: groupId, level: { in: [0, 1, 2] } },
+      where: { parentId: groupId, level: { in: [0, 1, 2] }, ...ACTIVE_CHAPTER },
       orderBy: [{ sort: "asc" }, { id: "asc" }],
       select: { id: true, slug: true, level: true },
     })
@@ -155,12 +157,13 @@ export class ChapterService {
         parentId: true,
         level: true,
         anchorId: true,
+        status: true,
         ...TITLES,
-        volume: { select: { slug: true, ...TITLES } },
+        volume: { select: { slug: true, status: true, ...TITLES } },
         contents: { orderBy: [{ id: "asc" }], select: { slug: true, tei: true } },
       },
     })
-    if (!chapter) throw this.app.httpErrors.notFound("Chapter not found")
+    if (!chapter || chapter.status !== "active" || (chapter.volume && chapter.volume.status !== "active")) throw this.app.httpErrors.notFound("Chapter not found")
 
     const breadcrumb = await breadcrumbOf(this.db, chapter.parentId)
 

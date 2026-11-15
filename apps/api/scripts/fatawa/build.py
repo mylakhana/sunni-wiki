@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fatawa Razawiyyah: legacy CSVs -> chapter tree + TEI fragments (JSON per volume).
+"""Fatawa Radawiyyah: legacy CSVs -> chapter tree + TEI fragments (JSON per volume).
 
 Usage (from apps/api/scripts):
     python3 -m fatawa.build --all              # all 31 volumes

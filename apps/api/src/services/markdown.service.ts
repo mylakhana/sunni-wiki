@@ -85,13 +85,15 @@ export class MarkdownService {
         id: true,
         slug: true,
         parentId: true,
+        status: true,
+        volume: { select: { status: true } },
         titleEn: true,
         titleAr: true,
         titleUr: true,
         contents: { orderBy: [{ id: "asc" }], select: { id: true, slug: true, updatedAt: true, markdownChars: true } },
       },
     })
-    if (!ch) throw this.app.httpErrors.notFound("Chapter not found")
+    if (!ch || ch.status !== "active" || (ch.volume && ch.volume.status !== "active")) throw this.app.httpErrors.notFound("Chapter not found")
     const content = ch.contents.find((c) => c.slug === "default") ?? ch.contents[0]
     if (!content) throw this.app.httpErrors.notFound("Chapter has no text")
 

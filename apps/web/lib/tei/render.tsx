@@ -68,8 +68,10 @@ function block(n: XNode, key: number, isInline: boolean): ReactNode {
           {inline(c)}
         </h3>
       )
+    case "label":
+      return <strong key={key} className="tei-label">{inline(c)}</strong>
     case "p":
-      return <p key={key} className={`${langClass(lang)} tei-block${a["@_rend"] === "center" || (lang === "ar" && centerArabicP(c)) ? " text-center" : ""}`} dir={dirOf(lang)}>{inline(c)}</p>
+      return <p key={key} className={`${langClass(lang)} tei-block${a["@_type"] === "translation" ? " tei-translation" : ""}${a["@_rend"] === "center" || (lang === "ar" && centerArabicP(c)) ? " text-center" : ""}`} dir={dirOf(lang)}>{inline(c)}</p>
     case "quote": {
       if (isInline) return <q key={key} lang={lang} className={fontClass(lang)}>{inline(c)}</q>
       if (a["@_type"] === "quran") {

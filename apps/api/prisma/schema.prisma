@@ -66,7 +66,7 @@ model Book {
   description String?  @db.Text
   // Languages the book's text is available in, e.g. ["ar","ur"]
   languages   Json?
-  // Path under apps/web/public, e.g. "/books/fatawa-razawiyya/cover.jpg".
+  // Path under apps/web/public, e.g. "/books/fatawa-radawiyya/cover.jpg".
   // null → UI falls back to the generated gradient cover.
   coverImage  String?  @db.VarChar(255)
   published   Boolean  @default(false)
@@ -86,6 +86,11 @@ model Book {
 
 // Optional layer. Books without volumes simply have no Volume rows and
 // Chapter.volumeId = null.
+enum Status {
+  active
+  inactive
+}
+
 model Volume {
   id       Int     @id @default(autoincrement())
   bookId   Int
@@ -94,6 +99,8 @@ model Volume {
   titleEn  String? @db.VarChar(255)
   titleAr  String? @db.VarChar(255)
   titleUr  String? @db.VarChar(255)
+  // inactive = hidden from the API (e.g. no content imported yet)
+  status   Status  @default(active)
 
   book     Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
   chapters Chapter[]
@@ -119,6 +126,7 @@ model Chapter {
   titleEn  String? @db.VarChar(500)
   titleAr  String? @db.VarChar(500)
   titleUr  String? @db.VarChar(500)
+  status   Status  @default(active) // inactive = hidden from the API
 
   book     Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
   volume   Volume?   @relation(fields: [volumeId], references: [id], onDelete: Cascade)

@@ -122,6 +122,7 @@ export class LibraryService {
         ...bookSelect,
         author: { select: { id: true, slug: true, nameEn: true, nameAr: true, nameUr: true, prompt: true } }, // detail only: the AI persona prompt
         volumes: {
+          where: { status: "active" },
           orderBy: [{ sort: "asc" }, { id: "asc" }],
           select: {
             id: true,
@@ -130,7 +131,7 @@ export class LibraryService {
             titleEn: true,
             titleAr: true,
             titleUr: true,
-            _count: { select: { chapters: { where: { level: { in: [1, 2] } } } } },
+            _count: { select: { chapters: { where: { level: { in: [1, 2] }, status: "active" } } } },
           },
         },
       },
@@ -138,7 +139,7 @@ export class LibraryService {
     if (!row) throw this.app.httpErrors.notFound("Book not found")
     const { volumes, ...book } = row
     // booklets only (level 1): the count shown when the reader hides chapters/topics
-    const tops = await this.db.chapter.groupBy({ by: ["volumeId"], where: { bookId: row.id, level: 1 }, _count: { _all: true } })
+    const tops = await this.db.chapter.groupBy({ by: ["volumeId"], where: { bookId: row.id, level: 1, status: "active" }, _count: { _all: true } })
     const topByVolume = new Map(tops.map((t) => [t.volumeId, t._count._all]))
     return {
       data: {

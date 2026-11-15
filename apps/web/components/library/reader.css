@@ -48,3 +48,6 @@
 
 /* shared-passage highlight (CSS Custom Highlight API) */
 ::highlight(shared-quote) { background: color-mix(in srgb, var(--lib-gold) 40%, transparent); color: inherit; }
+
+.tei-translation { border-inline-start: 2px solid var(--lib-gold); padding-inline-start: .75em; }
+.tei-label { color: var(--lib-gold); font-weight: 600; }

@@ -21,6 +21,7 @@ A free, public library of trusted Islamic books, readable in Arabic, Urdu and En
 - Env: `API_URL` (default `http://localhost:3001`), see `apps/web/.env.example`.
 - Routes: `/` home, `/browse`, `/authors`, `/authors/[slug]`, `/books/[slug]` (volumes + lazily loaded chapter tree, title filter), `/books/[slug]/[chapter]` (**one chapter per page**; very long chapters are split into `?part=N` pages).
 - **Caching:** `cacheComponents: true`. Loaders use `use cache` with `cacheLife` and `cacheTag` (`library`, per-book, per-author). The library (all books, authors, categories) is cached in memory **per web server instance** (~1 h). Failures are never cached for long. Invalidate with `revalidateTag("library")`.
+- **Continuous reading** (`components/library/chapter-stream.tsx`, `lib/tei/next-chapter-action.tsx`): at the end of the last chapter on screen the next chapter (skipping groups/empty ones) is appended below; forward only, no prepend. The chapter crossing a band near the top of the viewport is the *current* one: toolbar, contents highlight, Ask-AI contexts, keyboard prev/next and the URL (`history.replaceState`, no history entry per chapter) follow it. Previous/Next buttons stay and are normal jumps. Chapters far from the viewport are unmounted (short ones, height kept) or hidden with `content-visibility` (long ones with lazy parts).
 - Reader renders TEI to React (`lib/tei/render.tsx`), no `dangerouslySetInnerHTML`. Reading prefs and "continue reading" live in localStorage (`last:v2`, slugs).
 - **Share selection** (`components/library/share-selection.tsx`): selecting chapter text shows a toolbar (floating on laptop, bottom bar on mobile) with Copy (adds citation), Copy link and native Share. The link is `?part&q[&e]#<nearest s-anchor>`; `q` is the selected text (long selections keep only the first/last 40 chars, `q` + `e`). On load the text is re-found (diacritics/whitespace ignored) and highlighted via the CSS Custom Highlight API (`::highlight(shared-quote)`). Share-as-image is not built yet.
 - **Author persona prompt:** `Author.prompt` (nullable Text, migration `20261115000100_author_prompt`) holds the AI persona. Seeded from `apps/api/scripts/prompts/<author-slug>.md` by the import seed script. `GET /books/:slug` returns it as `author.prompt` (detail only, not in lists). Ask AI prepends it to the generic grounding rules and shows the result in the "System prompt" panel.
@@ -36,6 +37,24 @@ A free, public library of trusted Islamic books, readable in Arabic, Urdu and En
   - Still dummy (`TODO(ai)`): the final system prompt text.
 - **Decisions:** in-book full-text search is dropped for now (title filter only); no reading-progress percentage (API has no total chapter count).
 
+## Data import (legacy CSV → DB)
+
+Prerequisite: DB migrated (`pnpm prisma migrate deploy`). Run from `apps/api`: `python3 scripts/import_all.py [--book fatawa|bahar|miraat|faizan|siraat] [--skip-seed]` — the single entry point; it re-imports from scratch (each book's old data is cleaned first).
+
+Sequence run by `import_all.py` (stops at the first failure):
+1. `pnpm db:seed` (only if the script exists in `package.json`).
+2. Per book, in order — **fatawa**: `seed_fatawa_razawiyyah.py` → `python3 -m fatawa.build --all` (in `scripts/`) → `import_fatawa.py --all`; **bahar**: `seed_bahar_e_shariat.py` → `python3 -m bahar.build --all` (in `scripts/`) → `import_bahar.py --all`; **miraat / faizan / siraat** (books 03-05, one generic pipeline, config per book in `scripts/multibook/config.py`): `seed_books.py --book X` → `python3 -m multibook.build --book X --all` (in `scripts/`) → `import_books.py --book X --all`. Details: `apps/api/docs/data-import-multibook.md`; CSV analysis tool: `scripts/analyze_csv.py`.
+   - seed = upsert author/category/book, clean that book's chapters/content/volumes, create volumes; build = CSV → TEI JSON in `scripts/out/<book-slug>/`; import = insert chapters + content, then `pnpm backfill:markdown`. Bahar's import marks volumes with no content `inactive` (the API hides inactive volumes/chapters, see `status` on `volumes`/`chapters`).
+3. Once, after all books: `chapters_titles_sync.py --mode fix` (splits booklet titles; sets `titleUr = "مقدمہ"` on every chapter with `titleEn = 'Front matter'`). Idempotent.
+
+Adding a book:
+1. Analyze its CSVs (columns, TextP codes, TOC↔text page linkage, defects) and note findings in `apps/api/scripts/README.md`.
+2. Copy its page images from `data-extracted/<book>/Images` to `apps/web/public/<book-slug>/` (never modify `data-extracted/`).
+3. Create `seed_<book>.py` (author, category, book slug, volumes; clean only this book), `<book>/build.py` (package, output to `scripts/out/<book-slug>/`), and `import_<book>.py` (scoped to the book by `books.slug`).
+4. Reuse shared code (`fatawa/tei.py`, `fatawa/rtf_decode.py`, DB helpers in `seed_fatawa_razawiyyah.py`) by importing it **unmodified**. If formats differ and changing shared code could alter an earlier book's output, copy and modify instead. Never share `out/` folders (volume slugs repeat across books).
+5. Register the book in `BOOKS` in `scripts/import_all.py`; give no-content volumes `inactive` status in the import script.
+6. Run `import_all.py` and confirm earlier books' counts/`chapters.json` are unchanged; document the book in `apps/api/docs/data-import-<book>.md`.
+
 ## Known gaps
-- Page images are hosted from `apps/web/public/<book-slug>/` (e.g. `/fatawa-razawiyya/NAME.jpg`); TEI `graphic` URLs starting with `/` render as images, other relative paths show a placeholder.
+- Page images are hosted from `apps/web/public/<book-slug>/` (e.g. `/fatawa-radawiyya/NAME.jpg`); TEI `graphic` URLs starting with `/` render as images, other relative paths show a placeholder.
 - `coverImage` must be a full or site-relative URL.

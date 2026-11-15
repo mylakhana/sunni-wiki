@@ -34,6 +34,7 @@ body { background: var(--lib-bg); }
 /* ---------- Reader ---------- */
 .reader-area { font-size: calc(.875rem * var(--fs)); }
 .chapter-card { scroll-margin-top: 150px; }
+.chapter-card ~ .chapter-card { margin-top: 2.5rem; } /* streamed chapters: space between the cards */
 .blk-sh { font-size: 1.15em; font-weight: 600; margin: 1.6em 0 .5em; }
 .blk-h { font-size: 1.25em; font-weight: 700; letter-spacing: -.01em; margin: 1.9em 0 .6em; }
 .blk-p { line-height: 1.8; color: var(--lib-ink); margin: .8em 0; }

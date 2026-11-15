@@ -41,6 +41,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html
       lang="en"
       suppressHydrationWarning
+      data-scroll-behavior="smooth"
       className={cn("antialiased", fontMono.variable, "font-sans", geist.variable, amiri.variable, nastaliq.variable)}
     >
       <body>

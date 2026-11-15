@@ -14,6 +14,8 @@ the brackets (a missing closing bracket is tolerated). titleEn is left untouched
 brackets only get titleAr (titleUr is kept). Rows whose titleAr is already set (in the DB)
 are skipped, so re-running is safe.
 
+Fix mode also sets titleUr = "مقدمہ" on every chapter (all books) whose titleEn = 'Front matter'.
+
 Import only UPDATEs existing rows (matched by id); it never inserts or deletes.
 """
 import argparse
@@ -59,6 +61,16 @@ def fix() -> None:
     print(f"fixed {changed} chapters, skipped {skipped} -> {FILE}")
 
 
+FRONT_MATTER_UR = "مقدمہ"
+
+
+def front_matter(conn) -> None:
+    with conn.cursor() as cur:
+        n = cur.execute("UPDATE chapters SET titleUr=%s WHERE titleEn='Front matter'", (FRONT_MATTER_UR,))
+    conn.commit()
+    print(f"front matter: titleUr set on {n} chapters")
+
+
 def import_(conn) -> None:
     if not FILE.exists():
         sys.exit(f"missing {FILE}: run with --mode export first")
@@ -89,6 +101,7 @@ def main() -> None:
             export(conn)
             fix()
             import_(conn)
+            front_matter(conn)
         elif a.mode == "export":
             export(conn)
         else:

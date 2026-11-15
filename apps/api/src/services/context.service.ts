@@ -1,3 +1,4 @@
+import { ACTIVE_CHAPTER } from "./status.js"
 import type { FastifyInstance } from "fastify"
 import { env } from "../config/env.js"
 import type { PrismaClient } from "../generated/prisma/client.js"
@@ -57,9 +58,9 @@ export class ContextService {
     const hit = this.trees.get(bookId)
     if (hit && Date.now() - hit.at < TTL_MS) return hit.tree
     const [volumes, chapters, contents] = await Promise.all([
-      this.db.volume.findMany({ where: { bookId }, select: { id: true, sort: true } }),
+      this.db.volume.findMany({ where: { bookId, status: "active" }, select: { id: true, sort: true } }),
       this.db.chapter.findMany({
-        where: { bookId },
+        where: { bookId, ...ACTIVE_CHAPTER },
         select: { id: true, slug: true, parentId: true, volumeId: true, sort: true, level: true, titleEn: true, titleAr: true, titleUr: true },
       }),
       this.db.content.findMany({ where: { chapter: { bookId } }, select: { id: true, chapterId: true, slug: true, markdownChars: true } }),
@@ -131,8 +132,8 @@ export class ContextService {
     const kind = explicit?.[1]
     const value = explicit?.[2] ?? node
     if (kind !== "chapter") {
-      const v = await this.db.volume.findUnique({ where: { bookId_slug: { bookId: book.id, slug: value } }, select: { id: true } })
-      if (v) volumeId = v.id
+      const v = await this.db.volume.findUnique({ where: { bookId_slug: { bookId: book.id, slug: value } }, select: { id: true, status: true } })
+      if (v?.status === "active") volumeId = v.id
     }
     if (volumeId == null && kind !== "volume" && /^\d+$/.test(value)) {
       const n = tree.nodes.get(Number(value))

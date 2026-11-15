@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { startTransition, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { loadChapterPart } from "@/lib/tei/parts-action"
 
 /**
@@ -23,8 +23,7 @@ export function LazyParts({ book, chapter, next }: { book: string; chapter: stri
     try {
       const r = await loadChapterPart(book, chapter, next)
       if ("error" in r) throw new Error("part failed")
-      setLoaded(r.node)
-      setMore(r.hasMore)
+      startTransition(() => { setLoaded(<Suspense fallback={null}>{r.node}</Suspense>); setMore(r.hasMore) })
     } catch {
       started.current = false
       setError(true)
@@ -46,7 +45,7 @@ export function LazyParts({ book, chapter, next }: { book: string; chapter: stri
       {loaded}
       {loaded && more && <LazyParts book={book} chapter={chapter} next={next + 1} />}
       {!loaded && (
-        <div ref={ref} className="min-h-6 py-4 text-center text-xs" aria-live="polite">
+        <div ref={ref} data-lazy-parts className="min-h-6 py-4 text-center text-xs" aria-live="polite">
           {error ? (
             <button className="c-accent font-medium" onClick={() => void load()}>Could not load the rest. Try again</button>
           ) : busy ? (

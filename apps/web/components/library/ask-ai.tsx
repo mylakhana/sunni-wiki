@@ -146,10 +146,19 @@ export function AskAiContext({ book, authorPrompt, ids, fresh, onExit, onResolve
 
   const ctx = useMemo(() => (units ? buildContext(units, authorPrompt) : null), [units, authorPrompt])
   useEffect(() => { if (ctx) onContext(ctx) }, [ctx, onContext])
-  const exitRow = (text: string, sub?: string) => (
+  const [copied, setCopied] = useState<"ok" | "fail" | null>(null)
+  const copyAll = async () => {
+    if (!ctx) return
+    try { await navigator.clipboard.writeText(ctx.text); setCopied("ok") } catch { setCopied("fail") }
+    setTimeout(() => setCopied(null), 2500)
+  }
+  const exitRow = (text: string, sub?: string, withCopy?: boolean) => (
     <div className="card flex items-center justify-between gap-3 px-5 py-3" style={{ background: "color-mix(in srgb, #ef4444 14%, var(--lib-surface))" }}>
       <div><p className="c-muted text-xs">{text}</p>{sub && <p className="c-muted num text-[11px]">{sub}</p>}</div>
-      <button onClick={onExit} className="shrink-0 rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700">End AI chat</button>
+      <div className="flex shrink-0 items-center gap-2">
+        {withCopy && <button onClick={() => void copyAll()} title="Copy the system prompt + all selected texts, to use with any AI outside this site" className="rounded-full bg-lib-bg px-3 py-1.5 text-xs font-medium hover:opacity-80">{copied === "ok" ? "Copied ✓" : copied === "fail" ? "Copy failed" : "Copy system prompt + contents"}</button>}
+      <button onClick={onExit} className="rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700">End AI chat</button>
+      </div>
     </div>
   )
 
@@ -166,7 +175,7 @@ export function AskAiContext({ book, authorPrompt, ids, fresh, onExit, onResolve
   }
   return (
     <div className="space-y-4">
-      {exitRow(`AI context · ${units.length} item${units.length === 1 ? "" : "s"} selected`, `${fmt(ctx.chars)} chars · ~${fmt(ctx.tokens)} tokens sent as context`)}
+      {exitRow(`AI context · ${units.length} item${units.length === 1 ? "" : "s"} selected`, `${fmt(ctx.chars)} chars · ~${fmt(ctx.tokens)} tokens sent as context`, true)}
       <details className="card group px-5 py-4" style={{ borderStyle: "dashed" }}>
         <summary className="c-gold flex cursor-pointer list-none items-center justify-between text-xs font-semibold tracking-[.12em] uppercase">
           System prompt

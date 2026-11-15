@@ -21,7 +21,7 @@ URDU_FONTS = {"alvi nastaleeq", "aslam", "jameel noori nastaleeq"}
 
 
 # Public URL prefix (site-absolute) of the book's page images: apps/web/public/<book slug>/
-IMAGE_URL_PREFIX = "/fatawa-razawiyya"
+IMAGE_URL_PREFIX = "/fatawa-radawiyya"
 
 
 def esc(s: str) -> str:
