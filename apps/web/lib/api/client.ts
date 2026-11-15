@@ -5,7 +5,7 @@ export const API_URL = (process.env.API_URL ?? "http://localhost:3001").replace(
 
 /** status 0 = network/parse failure, otherwise the HTTP status. */
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public detail?: string) {
     super(message)
     this.name = "ApiError"
   }
@@ -29,7 +29,10 @@ async function request<T>(path: string, query?: Query): Promise<T> {
   } catch (e) {
     throw new ApiError(0, `API unreachable (${path}): ${e instanceof Error ? e.message : String(e)}`)
   }
-  if (!res.ok) throw new ApiError(res.status, `API ${res.status} for ${path}`)
+  if (!res.ok) {
+    const detail = await res.json().then((j: { message?: unknown }) => (typeof j.message === "string" ? j.message : undefined), () => undefined)
+    throw new ApiError(res.status, `API ${res.status} for ${path}`, detail)
+  }
   try {
     return (await res.json()) as T
   } catch {

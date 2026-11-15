@@ -59,6 +59,9 @@ importers:
       dotenv:
         specifier: ^18.0.10
         version: 18.0.10
+      fast-xml-parser:
+        specifier: 5.12.1
+        version: 5.12.1
       fastify:
         specifier: ^5.12.8
         version: 5.12.8

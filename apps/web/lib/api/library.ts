@@ -1,9 +1,9 @@
 import "server-only"
 import { cacheLife, cacheTag } from "next/cache"
-import type { Author, Book, BookDetail, Category, ChapterDetail, ChapterItem, SearchIndex } from "@/lib/types"
+import type { Author, Book, BookDetail, Category, ChapterDetail, ChapterItem, ContextUnits, SearchIndex } from "@/lib/types"
 import { ApiError, apiAll, apiItem } from "./client"
-import { mapAuthor, mapBook, mapBookDetail, mapCategory, mapChapter, mapChapterItem } from "./mappers"
-import type { AuthorDetailDto, AuthorDto, BookDetailDto, BookDto, CategoryDto, ChapterDetailDto, ChapterListItemDto } from "./types"
+import { mapAuthor, mapBook, mapBookDetail, mapCategory, mapChapter, mapChapterItem, mapContextUnits } from "./mappers"
+import type { AuthorDetailDto, AuthorDto, BookDetailDto, BookDto, CategoryDto, ChapterDetailDto, ChapterListItemDto, ContextUnitsDto } from "./types"
 
 /*
  * Caching approach
@@ -78,7 +78,7 @@ export async function getSearchIndex(): Promise<SearchIndex> {
 
 async function cachedBook(slug: string): Promise<Res<BookDetail | null>> {
   "use cache"
-  // v2: payload gained volumes[].topLevelCount (editing this body invalidates entries cached by the old shape)
+  // v3: payload gained volumes[].topLevelCount and author.prompt (editing this body invalidates entries cached by the old shape)
   try {
     const value = mapBookDetail(await apiItem<BookDetailDto>(`/books/${encodeURIComponent(slug)}`))
     cacheLife("hours")
@@ -173,4 +173,12 @@ export async function getFirstChapterSlug(book: BookDetail): Promise<string | nu
   } catch {
     return null
   }
+}
+
+/**
+ * Units (level 1/2 nodes owning text) under `node` = `volume:<slug>` or `chapter:<id>`, in reading order. Not cached (cheap, selection-time).
+ * Throws ApiError: 413 when the total exceeds the AI cap (`detail` has the API's message), 404 for an unknown node.
+ */
+export async function getContextUnits(book: string, node: string): Promise<ContextUnits> {
+  return mapContextUnits(await apiItem<ContextUnitsDto>(`/books/${encodeURIComponent(book)}/context-units`, { node }))
 }

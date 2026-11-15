@@ -8,10 +8,15 @@ import {
   bookSchema,
   booksQuerySchema,
   chapterDetailSchema,
+  chapterMarkdownSchema,
   chapterListItemSchema,
   chapterParamsSchema,
   chaptersQuerySchema,
+  contextUnitsQuerySchema,
+  contextUnitsSchema,
 } from "../../schemas/library.js"
+import { errorResponseSchema } from "../../schemas/error.js"
+import { ContextService } from "../../services/context.service.js"
 import { ChapterService } from "../../services/chapter.service.js"
 import { ExportService } from "../../services/export.service.js"
 import { zipStream } from "../../services/zip.js"
@@ -20,7 +25,8 @@ import { LibraryService } from "../../services/library.service.js"
 
 export default async function booksRoute(app: FastifyInstance) {
   const library = new LibraryService(prisma, app)
-  const chapters = new ChapterService(prisma, app)
+  const context = new ContextService(prisma, app)
+  const chapters = new ChapterService(prisma, app, context)
   const exporter = new ExportService(prisma, app)
   const r = app.withTypeProvider<FastifyZodOpenApiTypeProvider>()
 
@@ -79,6 +85,34 @@ export default async function booksRoute(app: FastifyInstance) {
       },
     },
     async (req) => chapters.detail(req.params.slug, req.params.chapterSlug),
+  )
+
+  r.get(
+    "/books/:slug/chapters/:chapterSlug/markdown",
+    {
+      config: { cache: CACHE.chapter },
+      schema: {
+        tags: ["chapters"],
+        summary: "One chapter's text converted from TEI to compact Markdown (Ask-AI context)",
+        params: chapterParamsSchema,
+        response: { 200: single(chapterMarkdownSchema) },
+      },
+    },
+    async (req) => context.markdown.chapter(req.params.slug, req.params.chapterSlug),
+  )
+
+  r.get(
+    "/books/:slug/context-units",
+    {
+      schema: {
+        tags: ["chapters"],
+        summary: "Ask-AI units (booklets/chapters that own text) below a volume or chapter, with Markdown sizes; 413 over the cap",
+        params: slugParamSchema,
+        querystring: contextUnitsQuerySchema,
+        response: { 200: single(contextUnitsSchema), 413: errorResponseSchema },
+      },
+    },
+    async (req) => context.units(req.params.slug, req.query.node),
   )
 
   r.get(

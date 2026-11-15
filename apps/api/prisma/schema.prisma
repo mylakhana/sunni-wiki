@@ -48,6 +48,8 @@ model Author {
   birthYear Int? // Gregorian; display as "1856 – 1921"
   deathYear Int?
   bio       String? @db.Text
+  // Persona / system prompt used by the AI agent when answering as this author
+  prompt    String? @db.Text
   books     Book[]
 
   @@map("authors")
@@ -142,6 +144,8 @@ model Content {
   slug      String   @default("default") @db.VarChar(50)
   tei       String   @db.LongText // TEI XML fragment (<div>…</div>), not a full <TEI> doc
   version   Int      @default(1)
+  // Length in chars of the Markdown derived from `tei` (services/tei-markdown.service.ts); NULL until backfilled
+  markdownChars Int? @map("markdown_chars")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -9,7 +9,8 @@ Run from apps/api, after `python3 scripts/seed_fatawa_razawiyyah.py` and
 
 Cleans previous data first: all chapters (+ content, via FK cascade/explicit delete)
 of the selected volumes are deleted, then re-inserted. Volumes themselves are kept
-(created by the seed script).
+(created by the seed script). Finally runs `pnpm backfill:markdown`
+(scripts/backfill-markdown-chars.ts) to fill content.markdown_chars.
 """
 import argparse
 import json
@@ -85,6 +86,12 @@ def main() -> None:
     # titles (titleAr / titleUr) right after every successful import. Idempotent.
     subprocess.run(
         [sys.executable, str(Path(__file__).resolve().parent / "chapters_titles_sync.py"), "--mode", "fix"],
+        check=True,
+    )
+    # Fill content.markdown_chars (exact Ask-AI sizes) for the freshly inserted rows (NULL until then).
+    subprocess.run(
+        ["pnpm", "backfill:markdown"],
+        cwd=Path(__file__).resolve().parent.parent,
         check=True,
     )
 

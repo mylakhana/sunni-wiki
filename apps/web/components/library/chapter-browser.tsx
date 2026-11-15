@@ -6,10 +6,13 @@ import { loadChapterLevel } from "@/lib/actions"
 import type { ChapterItem, Volume } from "@/lib/types"
 import { titleOf } from "@/lib/types"
 import { ChapterTitles } from "./chapter-titles"
+import { CheckBox, chapterKey, unitOf, volumeKey, type SelectApi } from "./context-select"
 import { usePref } from "./use-pref"
+import { fmt } from "@/lib/ai-context"
 
 type Level = { items: ChapterItem[] } | { error: true }
-type Ctx = { book: string; filter: string; topics: boolean; active?: string; openPath: string[] }
+/** `select`: selection mode (Ask AI context picker): rows get tri-state checkboxes instead of links. */
+type Ctx = { book: string; filter: string; topics: boolean; active?: string; openPath: string[]; select?: SelectApi }
 
 /** Levels already fetched in this browser session (the server also caches them). */
 const levels = new Map<string, ChapterItem[]>()
@@ -23,7 +26,7 @@ const chev = (open: boolean, rtl = false) => (
 
 /** One level of the contents tree; fetched when first rendered. */
 /** `only`: show just these levels (a booklet lists its chapters, not the sub-topic anchors of its intro). */
-function ChapterLevel({ ctx, volume, parent, quiet = false, only, onEmpty }: { ctx: Ctx; volume: string | null; parent: string | null; quiet?: boolean; only?: number[]; onEmpty?: () => void }) {
+function ChapterLevel({ ctx, volume, parent, trail, quiet = false, only, onEmpty }: { ctx: Ctx; volume: string | null; parent: string | null; trail: string[]; quiet?: boolean; only?: number[]; onEmpty?: () => void }) {
   const key = `${ctx.book}|${volume ?? ""}|${parent ?? ""}`
   const [res, setRes] = useState<Level | "loading">(() => (levels.has(key) ? { items: levels.get(key)! } : "loading"))
   const [attempt, setAttempt] = useState(0)
@@ -58,31 +61,65 @@ function ChapterLevel({ ctx, volume, parent, quiet = false, only, onEmpty }: { c
   if (quiet && (!shown.length || !items.length)) return null
   if (!shown.length) return <p className="c-muted px-3 py-2 text-xs">No chapters yet.</p>
   if (!items.length) return <p className="c-muted px-3 py-2 text-xs">No chapter titles match.</p>
-  return <ul className="space-y-0.5">{items.map((c) => <ChapterNode key={c.id} ctx={ctx} item={c} />)}</ul>
+  return <ul className="space-y-0.5">{items.map((c) => <ChapterNode key={c.id} ctx={ctx} item={c} trail={trail} />)}</ul>
+}
+
+/** Selection mode: checkbox + titles (+ size / note) in place of a link. Level 3 anchors are read-only. */
+function SelectLabel({ ctx, item, trail }: { ctx: Ctx; item: ChapterItem; trail: string[] }) {
+  const s = ctx.select!
+  const key = chapterKey(item.id)
+  const unit = unitOf(item)
+  const state = s.stateOf(key, trail, unit)
+  const need = s.needsResolve(key, trail, unit)
+  useEffect(() => { if (need) s.resolve(key) }, [need, key, s])
+  if (item.level === 3) {
+    return <div className="min-w-0 flex-1 py-2 pr-3"><ChapterTitles t={item} /><span className="c-muted block text-[11px]">included in chapter</span></div>
+  }
+  const size = unit ? unit.chars : item.subtreeChars
+  const note = size != null && size > s.cap ? undefined : s.note(key) // the size line already says "too large"
+  const noText = item.level === 2 && item.chars === 0
+  const tooBig = size != null && size > s.cap
+  const off = s.locked || noText || tooBig
+  const line = noText ? "No text" : tooBig ? (item.level === 2 ? "Too large for AI" : "Too large to select at once — pick items inside") : size != null ? `${fmt(size)} chars` : null
+  return (
+    <label className={`flex min-w-0 flex-1 items-start gap-2 py-2 pr-3 ${off ? "opacity-60" : "cursor-pointer"}`}>
+      <input type="checkbox" className="sr-only" checked={state === "all"} disabled={off} onChange={() => s.toggle(key, trail, unit)} />
+      <span className="mt-0.5"><CheckBox state={state} busy={s.busy(key)} /></span>
+      <span className="min-w-0 flex-1">
+        <ChapterTitles t={item} />
+        {line && <span className="c-muted block text-[11px] tabular-nums">{line}</span>}
+        {note && <span className="block text-[11px] text-red-600" role="alert">{note}</span>}
+      </span>
+    </label>
+  )
 }
 
 /** Level 0 (e.g. "Book of Prayer"): a grouping title above its booklets / chapters. Not a link, not collapsible. */
-function GroupNode({ ctx, item }: { ctx: Ctx; item: ChapterItem }) {
+function GroupNode({ ctx, item, trail }: { ctx: Ctx; item: ChapterItem; trail: string[] }) {
   return (
     <li className="pt-2">
-      <div className="c-gold px-3 pt-1 pb-1 [&_div]:font-semibold" data-group={item.slug}>
-        <ChapterTitles t={item} />
-      </div>
+      {ctx.select ? (
+        <div className="flex px-1" data-group={item.slug}><SelectLabel ctx={ctx} item={item} trail={trail} /></div>
+      ) : (
+        <div className="c-gold px-3 pt-1 pb-1 [&_div]:font-semibold" data-group={item.slug}>
+          <ChapterTitles t={item} />
+        </div>
+      )}
       <div className="border-lib-line ml-3 border-l pl-1">
-        <ChapterLevel ctx={ctx} volume={null} parent={item.id} quiet />
+        <ChapterLevel ctx={ctx} volume={null} parent={item.id} trail={[...trail, chapterKey(item.id)]} quiet />
       </div>
     </li>
   )
 }
 
-function ChapterNode({ ctx, item }: { ctx: Ctx; item: ChapterItem }) {
+function ChapterNode({ ctx, item, trail }: { ctx: Ctx; item: ChapterItem; trail: string[] }) {
   const [open, setOpen] = useState(() => ctx.openPath.includes(item.id))
   const [empty, setEmpty] = useState(false) // discovered at runtime: expanded, yet the level has nothing to show
   const markEmpty = useCallback(() => { setEmpty(true); setOpen(false) }, [])
   const wantOpen = ctx.openPath.includes(item.id)
   // the shell persists across chapters: open the ancestors of the newly shown chapter
   useEffect(() => { if (wantOpen) setOpen(true) }, [wantOpen])
-  if (item.level === 0) return <GroupNode ctx={ctx} item={item} />
+  if (item.level === 0) return <GroupNode ctx={ctx} item={item} trail={trail} />
   const isActive = item.slug === ctx.active
   // children of a booklet / chapter are all topics-level (2+), which are hidden when "Show Topics" is off: nothing to expand then
   const expandable = item.hasChildren && ctx.topics && !empty
@@ -94,33 +131,50 @@ function ChapterNode({ ctx, item }: { ctx: Ctx; item: ChapterItem }) {
           <button onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={`${open ? "Collapse" : "Expand"} ${titleOf(item)}`}
             className="c-muted mt-2 grid h-8 w-8 shrink-0 place-items-center rounded-full">{chev(open, !!(item.ar || item.ur))}</button>
         ) : <span className="w-2 shrink-0" />}
-        <Link href={`/books/${encodeURIComponent(ctx.book)}/${encodeURIComponent(item.slug)}`} aria-current={isActive ? "page" : undefined} className="min-w-0 flex-1 py-2 pr-3">
-          <ChapterTitles t={item} />
-        </Link>
+        {ctx.select ? <SelectLabel ctx={ctx} item={item} trail={trail} /> : (
+          <Link href={`/books/${encodeURIComponent(ctx.book)}/${encodeURIComponent(item.slug)}`} aria-current={isActive ? "page" : undefined} className="min-w-0 flex-1 py-2 pr-3">
+            <ChapterTitles t={item} />
+          </Link>
+        )}
       </div>
       {open && expandable && (
         <div className="border-lib-line ml-4 border-l pl-1">
-          <ChapterLevel ctx={ctx} volume={null} parent={item.id} only={item.level === 1 ? [2] : undefined} onEmpty={markEmpty} />
+          <ChapterLevel ctx={ctx} volume={null} parent={item.id} trail={[...trail, chapterKey(item.id)]} only={item.level === 1 ? [2] : undefined} onEmpty={markEmpty} />
         </div>
       )}
     </li>
   )
 }
 
-function VolumeSection({ ctx, volume, defaultOpen }: { ctx: Ctx; volume: Volume; defaultOpen: boolean }) {
-  const [open, setOpen] = useState(defaultOpen)
-  useEffect(() => { if (defaultOpen) setOpen(true) }, [defaultOpen])
+/** Selection mode: tick a whole volume (resolved to its units; a clear message when it exceeds the AI cap). */
+function VolumeCheck({ ctx, volume }: { ctx: Ctx; volume: Volume }) {
+  const s = ctx.select!
+  const key = volumeKey(volume.slug)
+  const state = s.stateOf(key, [], null)
+  return (
+    <label className={`flex h-12 shrink-0 items-center pl-3 ${s.locked ? "opacity-60" : "cursor-pointer"}`} title="Select the whole volume">
+      <input type="checkbox" className="sr-only" checked={state === "all"} disabled={s.locked} onChange={() => s.toggle(key, [], null)} aria-label={`Select ${volume.en || volume.ar || volume.ur || `volume ${volume.sort}`}`} />
+      <CheckBox state={state} busy={s.busy(key)} />
+    </label>
+  )
+}
+
+function VolumeSection({ ctx, volume, open, onToggle }: { ctx: Ctx; volume: Volume; open: boolean; onToggle: () => void }) {
   const count = ctx.topics ? volume.chapterCount : volume.topLevelCount
   return (
     <section className="bd-line border-b last:border-b-0">
-      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex h-12 w-full items-center justify-between px-3 text-left">
+      <div className="flex items-center">
+      {ctx.select && <VolumeCheck ctx={ctx} volume={volume} />}
+      <button onClick={onToggle} aria-expanded={open} className="flex h-12 w-full items-center justify-between px-3 text-left">
         <span className="min-w-0 font-medium">
           {volume.en || volume.ar || volume.ur || `Volume ${volume.sort}`}
           <span className="c-muted ml-2 text-xs font-normal">{count} chapters</span>
         </span>
         {count > 0 && <span className="c-muted">{chev(open)}</span>}
       </button>
-      {open && count > 0 && <div className="pb-3"><ChapterLevel ctx={ctx} volume={volume.slug} parent={null} /></div>}
+      </div>
+      {ctx.select?.note(volumeKey(volume.slug)) && <p className="px-3 pb-2 text-[11px] text-red-600" role="alert">{ctx.select.note(volumeKey(volume.slug))}</p>}
+      {open && count > 0 && <div className="pb-3"><ChapterLevel ctx={ctx} volume={volume.slug} parent={null} trail={[volumeKey(volume.slug)]} /></div>}
     </section>
   )
 }
@@ -129,12 +183,22 @@ function VolumeSection({ ctx, volume, defaultOpen }: { ctx: Ctx; volume: Volume;
  * Lazily-loaded contents: volumes (if any) -> top-level chapters -> nested sections.
  * Used on the book page and in the reader sidebar. The filter only searches the titles already loaded.
  */
-export function ChapterBrowser({ book, volumes, active, openVolume, openPath = [] }: {
-  book: string; volumes: Volume[]; active?: string; openVolume?: string | null; openPath?: string[]
+export function ChapterBrowser({ book, volumes, active, openVolume, openPath = [], select, singleOpen = false }: {
+  book: string; volumes: Volume[]; active?: string; openVolume?: string | null; openPath?: string[]; select?: SelectApi; singleOpen?: boolean
 }) {
+  const [openVols, setOpenVols] = useState<Set<string>>(() => new Set(volumes.length === 1 && volumes[0] ? [volumes[0].slug] : openVolume ? [openVolume] : []))
+  // the shell persists across chapters: follow the newly shown chapter's volume
+  useEffect(() => {
+    if (!openVolume) return
+    setOpenVols((s) => (s.has(openVolume) ? s : new Set(singleOpen ? [openVolume] : [...s, openVolume])))
+  }, [openVolume, singleOpen])
+  const toggleVol = (slug: string) => setOpenVols((s) => {
+    if (s.has(slug)) { const n = new Set(s); n.delete(slug); return n }
+    return singleOpen ? new Set([slug]) : new Set([...s, slug])
+  })
   const [q, setQ] = useState("")
   const [topics, setTopics] = usePref<boolean>("topics", true)
-  const ctx: Ctx = { book, filter: norm(q.trim()), topics, active, openPath }
+  const ctx: Ctx = { book, filter: norm(q.trim()), topics, active, openPath, select }
   const rootRef = useRef<HTMLDivElement>(null)
 
   // On load / refresh, bring the selected entry into view inside the sidebar. The tree loads lazily (volume -> booklet -> chapters),
@@ -180,10 +244,10 @@ export function ChapterBrowser({ book, volumes, active, openVolume, openPath = [
         </button>
       </div>
       {volumes.length === 0 ? (
-        <ChapterLevel ctx={ctx} volume={null} parent={null} />
+        <ChapterLevel ctx={ctx} volume={null} parent={null} trail={[]} />
       ) : (
         <div>
-          {volumes.map((v) => <VolumeSection key={v.id} ctx={ctx} volume={v} defaultOpen={volumes.length === 1 || v.slug === openVolume} />)}
+          {volumes.map((v) => <VolumeSection key={v.id} ctx={ctx} volume={v} open={openVols.has(v.slug)} onToggle={() => toggleVol(v.slug)} />)}
         </div>
       )}
     </div>

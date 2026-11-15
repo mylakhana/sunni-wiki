@@ -1,6 +1,6 @@
 import { bookHue } from "@/lib/ui"
-import type { Author, Book, BookDetail, Category, ChapterDetail, ChapterItem, ChapterLink, Volume } from "@/lib/types"
-import type { AuthorDto, BookDetailDto, BookDto, CategoryDto, ChapterDetailDto, ChapterLinkDto, ChapterListItemDto } from "./types"
+import type { Author, Book, BookDetail, Category, ChapterDetail, ChapterItem, ChapterLink, ContextUnits, Volume } from "@/lib/types"
+import type { AuthorDto, BookDetailDto, BookDto, CategoryDto, ChapterDetailDto, ChapterLinkDto, ChapterListItemDto, ContextUnitsDto } from "./types"
 
 export const mapCategory = (c: CategoryDto): Category => ({
   id: c.slug, en: c.titleEn, ar: c.titleAr, ur: c.titleUr, desc: c.description, bookCount: c.bookCount,
@@ -19,6 +19,7 @@ export const mapBook = (b: BookDto): Book => ({
 
 export const mapBookDetail = (b: BookDetailDto): BookDetail => ({
   ...mapBook(b),
+  authorPrompt: b.author.prompt?.trim() || null,
   volumeList: [...b.volumes].sort((x, y) => x.sort - y.sort).map((v): Volume => ({
     id: String(v.id), slug: v.slug, sort: v.sort, en: v.titleEn, ar: v.titleAr, ur: v.titleUr, chapterCount: v.chapterCount, topLevelCount: v.topLevelCount ?? v.chapterCount, // older cached API payloads lack it
   })),
@@ -26,7 +27,7 @@ export const mapBookDetail = (b: BookDetailDto): BookDetail => ({
 
 export const mapChapterItem = (c: ChapterListItemDto): ChapterItem => ({
   id: String(c.id), slug: c.slug, parentId: c.parentId == null ? null : String(c.parentId), volume: c.volumeSlug, hasChildren: c.hasChildren, level: c.level,
-  en: c.titleEn, ar: c.titleAr, ur: c.titleUr,
+  en: c.titleEn, ar: c.titleAr, ur: c.titleUr, chars: c.markdownChars ?? null, subtreeChars: c.subtreeChars ?? null,
 })
 
 const mapLink = (l: ChapterLinkDto | null): ChapterLink | null => (l ? { slug: l.slug, en: l.titleEn, ar: l.titleAr, ur: l.titleUr } : null)
@@ -37,4 +38,9 @@ export const mapChapter = (c: ChapterDetailDto): ChapterDetail => ({
   level: c.level, redirect: c.redirect,
   breadcrumb: c.breadcrumb.map((b) => ({ id: String(b.id), slug: b.slug, level: b.level, en: b.titleEn, ar: b.titleAr, ur: b.titleUr })),
   prev: mapLink(c.prev), next: mapLink(c.next), tei: c.tei,
+})
+
+export const mapContextUnits = (d: ContextUnitsDto): ContextUnits => ({
+  units: d.units.map((u) => ({ id: String(u.id), slug: u.slug, level: u.level, en: u.titleEn, ar: u.titleAr, ur: u.titleUr, chars: u.markdownChars })),
+  totalChars: d.totalChars, maxChars: d.maxChars, maxTokens: d.maxTokens,
 })

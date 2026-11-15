@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { saveLastRead, store } from "@/lib/store"
 import { titleOf, type BookDetail, type ChapterDetail } from "@/lib/types"
 import { langName } from "@/lib/ui"
+import { AskAiChat, AskAiContext, AskAiPicker } from "./ask-ai"
 import { BookCover } from "./book-cover"
 import { ChapterBrowser } from "./chapter-browser"
 import { ChapterTitles } from "./chapter-titles"
@@ -39,6 +40,26 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
   const [fs, setFs] = usePref<number>("fs", 1)
   const [prefs, setPrefs] = usePref<Prefs>("rd", DEFAULT_PREFS)
   const [drawer, setDrawer] = useState(false)
+  // PROTOTYPE "Ask AI": off -> pick (choose context in left panel) -> chat (context in main, chat on the right)
+  const [ai, setAi] = useState<"off" | "pick" | "chat">("off")
+  const [aiIds, setAiIds] = useState<string[]>([])
+  const [aiReady, setAiReady] = useState(false) // context fetched / restored and validated: the chat panel may open
+  const [aiFresh, setAiFresh] = useState(false) // true right after the picker fetched everything (no need to revalidate)
+  const startAi = () => { setAi("pick"); patch({ collapsed: false }); setDrawer(true) }
+  /** Mirrors chat mode into the address bar (no navigation, so the server page is not re-rendered). */
+  const syncUrl = (ids: string[] | null) => {
+    const u = new URL(location.href)
+    if (ids) { u.searchParams.set("ai", "1"); u.searchParams.set("ctx", ids.join(".")) }
+    else { u.searchParams.delete("ai"); u.searchParams.delete("ctx") }
+    history.replaceState(history.state, "", u)
+  }
+  const exitAi = () => { if (ai === "chat") try { sessionStorage.removeItem(`ask-ai:${aiIds.join(".")}`) } catch {}; setAi("off"); setAiReady(false); setDrawer(false); syncUrl(null) }
+  // refresh / shared link: restore chat mode from ?ai=1&ctx=…
+  useEffect(() => {
+    const q = new URLSearchParams(location.search)
+    const ids = [...new Set((q.get("ctx") ?? "").split(".").filter((x) => /^\d{1,12}$/.test(x)))].slice(0, 500) // validated for real by AskAiContext (404s dropped)
+    if (q.get("ai") === "1" && ids.length) { setAiIds(ids); setAiFresh(false); setAi("chat") }
+  }, [])
   const readerRef = useRef<HTMLElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
 
@@ -158,7 +179,7 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
   return (
     <ShellCtx.Provider value={setCur}>
     <div
-      className={`reader-root ${prefs.collapsed ? "collapsed" : ""}`}
+      className={`reader-root ${prefs.collapsed || ai === "chat" ? "collapsed" : ""} ${ai === "chat" ? "ai-chat" : ""}`}
       style={{ "--fs": fs } as React.CSSProperties} // text size multiplier, read by .reader-area
     >
       <div ref={barRef} className="bg-lib-accent fixed top-0 left-0 z-[70] h-[3px] w-full origin-left" style={{ transform: "scaleX(0)" }} role="progressbar" aria-label="Reading progress" />
@@ -181,6 +202,9 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
               <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M3 19 9 5l6 14M5 14h8M19 3v6M16 6h6" /></svg>
             </button>
           </div>
+          <button onClick={ai === "off" ? startAi : exitAi} aria-pressed={ai !== "off"} className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-medium ${ai !== "off" ? "bg-lib-accent text-white" : "c-muted hover:bg-(--lib-accent-soft)"}`} style={ai === "off" ? { background: "var(--lib-line)" } : undefined} title="SunniWiki AI">
+            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l1.8 4.7L15.5 10.5l-4.7 1.8L9 17l-1.8-4.7L2.5 10.5l4.7-1.8L9 4zM18 3v4M16 5h4M18 15v4M16 17h4" /></svg><span className="hidden sm:inline">SunniWiki AI</span>
+          </button>
           <button onClick={shareChapter} className="c-muted flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-medium hover:bg-(--lib-accent-soft)" style={{ background: "var(--lib-line)" }} aria-label="Share this chapter" title="Share this chapter">
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13" /></svg>
             <span className="hidden sm:inline">{copied ? "Copied" : "Share"}</span>
@@ -192,6 +216,8 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
       <div className="reader-grid mx-auto max-w-6xl px-4 pt-6 sm:px-6">
         {/* Left: contents */}
         <aside id="side" className={`card flex flex-col overflow-hidden lg:sticky ${drawer ? "open" : ""}`}>
+          {ai === "pick" ? <AskAiPicker book={book.id} volumes={book.volumeList} active={chapter?.slug} openVolume={volume?.slug}
+            openPath={chapter?.breadcrumb.filter((b) => b.slug !== chapter.slug).map((b) => b.id)} onCancel={exitAi} onProceed={(ids) => { setAiIds(ids); setAiFresh(true); setAi("chat"); setDrawer(false); syncUrl(ids) }} /> : <>
           <div className="flex items-center gap-2 p-3 pb-0">
             <div className="seg flex flex-1 rounded-xl p-0.5" style={{ background: "var(--lib-line)" }} role="tablist">
               {(["contents", "about"] as Tab[]).map((k) => (
@@ -207,7 +233,7 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
 
           <div className="relative flex-1 overflow-y-auto p-3">
             {tab === "contents" && chapter && (
-              <ChapterBrowser book={book.id} volumes={book.volumeList} active={chapter.slug} openVolume={volume?.slug} openPath={chapter.breadcrumb.map((b) => b.id)} />
+              <ChapterBrowser book={book.id} volumes={book.volumeList} active={chapter.slug} openVolume={volume?.slug} openPath={chapter.breadcrumb.map((b) => b.id)} singleOpen />
             )}
             {tab === "about" && (
               <div className="p-2">
@@ -233,6 +259,7 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
               </div>
             )}
           </div>
+          </>}
         </aside>
         {prefs.collapsed && (
           <button onClick={() => patch({ collapsed: false })} className="card fixed z-30 hidden h-10 w-10 place-items-center rounded-full lg:grid"
@@ -244,8 +271,13 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
 
         {/* Right: this chapter */}
         <main ref={readerRef} className="reader-area min-w-0 pb-8">
-          {children}
+          {ai === "chat" ? <AskAiContext book={book.id} authorPrompt={book.authorPrompt} ids={aiIds} fresh={aiFresh} onExit={exitAi} onResolved={(ids) => { if (!ids.length) { exitAi(); return } if (ids.length !== aiIds.length) { setAiIds(ids); syncUrl(ids) } setAiReady(true) }} /> : children}
         </main>
+        {ai === "chat" && aiReady && (
+          <aside className="card fixed inset-x-3 bottom-3 z-50 flex h-[70vh] flex-col overflow-hidden lg:sticky lg:inset-auto lg:z-auto lg:h-[calc(100vh-var(--hdr)-100px)]" style={{ top: "calc(var(--hdr) + 72px)" }} aria-label="SunniWiki AI chat">
+            <AskAiChat key={aiIds.join(".")} count={aiIds.length} storageKey={`ask-ai:${aiIds.join(".")}`} onExit={exitAi} />
+          </aside>
+        )}
       </div>
 
       <button onClick={() => setDrawer(true)}

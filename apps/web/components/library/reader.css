@@ -11,6 +11,7 @@
   .reader-root .reader-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); column-gap: 2rem;
     transition: grid-template-columns .35s cubic-bezier(.2,.8,.2,1), column-gap .35s cubic-bezier(.2,.8,.2,1); }
   .reader-root.collapsed .reader-grid { grid-template-columns: 0px minmax(0, 1fr); column-gap: 0; }
+  .reader-root.collapsed.ai-chat .reader-grid { grid-template-columns: 0px minmax(0, 1fr) 380px; column-gap: 1.5rem; }
   .reader-root.collapsed #side { opacity: 0; pointer-events: none; border-width: 0; }
   .reader-root #side { min-width: 0; transition: opacity .25s; }
 }

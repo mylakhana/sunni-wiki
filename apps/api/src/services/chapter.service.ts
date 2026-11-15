@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import type { PrismaClient } from "../generated/prisma/client.js"
+import { breadcrumbOf } from "./breadcrumb.js"
+import { ContextService } from "./context.service.js"
 import { decodeCursor, paginate } from "./pagination.js"
 
 type Titles = { titleEn: string | null; titleAr: string | null; titleUr: string | null }
@@ -20,6 +22,7 @@ export class ChapterService {
   constructor(
     private readonly db: PrismaClient,
     private readonly app: Pick<FastifyInstance, "httpErrors">,
+    private readonly sizes: ContextService = new ContextService(db, app),
   ) {}
 
   private async publishedBook(slug: string) {
@@ -69,11 +72,14 @@ export class ChapterService {
       const g = await this.db.chapter.groupBy({ by: ["parentId"], where: { parentId: { in: bookletIds }, level: 2 }, _count: { _all: true } })
       for (const x of g) if (x.parentId != null) withChapters.add(x.parentId)
     }
+    const sizes = await this.sizes.forBook(book.id)
     return {
       data: page.data.map(({ volume, _count, ...c }) => ({
         ...c,
         volumeSlug: volume?.slug ?? null,
         hasChildren: c.level === 1 ? withChapters.has(c.id) : _count.children > 0,
+        markdownChars: sizes.get(c.id)?.own ?? null,
+        subtreeChars: sizes.get(c.id)?.subtree ?? null,
       })),
       nextCursor: page.nextCursor,
     }
@@ -156,18 +162,7 @@ export class ChapterService {
     })
     if (!chapter) throw this.app.httpErrors.notFound("Chapter not found")
 
-    const breadcrumb: { id: number; slug: string; level: number; titleEn: string | null; titleAr: string | null; titleUr: string | null }[] = []
-    let parentId = chapter.parentId
-    for (let depth = 0; parentId != null && depth < 20; depth++) {
-      const p = await this.db.chapter.findUnique({
-        where: { id: parentId },
-        select: { id: true, slug: true, parentId: true, level: true, ...TITLES },
-      })
-      if (!p) break
-      const { parentId: next, ...ref } = p
-      breadcrumb.unshift(ref)
-      parentId = next
-    }
+    const breadcrumb = await breadcrumbOf(this.db, chapter.parentId)
 
     const order = await this.readingOrder(book.id)
     const pos = order.index.get(chapter.id)

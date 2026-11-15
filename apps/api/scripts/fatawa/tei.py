@@ -20,6 +20,10 @@ ARABIC_FONTS = {"al_mushaf", "nafees web naskh"}
 URDU_FONTS = {"alvi nastaleeq", "aslam", "jameel noori nastaleeq"}
 
 
+# Public URL prefix (site-absolute) of the book's page images: apps/web/public/<book slug>/
+IMAGE_URL_PREFIX = "/fatawa-razawiyya"
+
+
 def esc(s: str) -> str:
     return escape(_ILLEGAL.sub("", s))
 
@@ -159,8 +163,8 @@ def row_to_tei(code: str, text: str) -> list[str]:
             return []
         return [_mixed_note(t, lang)]
     if code == "i":
-        # Images stay where they are (Images/ is untouched); we only reference the name.
-        return [f'<figure><graphic url="Images/{esc(t)}"/></figure>']
+        # Page images are served by the web app from apps/web/public/<book-slug>/ (copy of data-extracted Images/).
+        return [f'<figure><graphic url="{IMAGE_URL_PREFIX}/{esc(t)}"/></figure>']
     if code in ("e", "ec"):
         return [_el("p", t, "en")]
     return [_el("p", t, lang)]

@@ -23,3 +23,8 @@ Full analysis + conversion plan: `~/.claude/plans/see-the-data-extracted-01-fata
 `seed_fatawa_razawiyyah.py` → `fatawa/build.py` (CSV→TEI JSON, `out/`) → `import_fatawa.py` (DB). Done for all 31 volumes;
 see `apps/api/docs/data-import-fatawa-razawiyyah.md`.
 Chapter model: `chapters.level` 0 = group (کتاب/باب), 1 = booklet (رسالہ), 2 = chapter, 3 = sub-topic (`anchorId` → `<anchor xml:id>` in the parent TEI). Booklets and chapters own TEI.
+
+### Markdown size backfill (`backfill-markdown-chars.ts`)
+TypeScript script (run with `tsx`, from `apps/api`). Converts every `content.tei` with the API's `tei-markdown.service` and stores the length in `content.markdown_chars`. Idempotent; re-run after any TEI change. The Ask-AI picker and TOC `markdownChars`/`subtreeChars` read this column.
+
+Run order: `seed_fatawa_razawiyyah.py` -> `fatawa/build.py` -> `import_fatawa.py` -> `backfill-markdown-chars.ts` (also called at the end of the import so new data always has sizes). Needs the `markdown_chars` migration applied first (`prisma migrate deploy`).

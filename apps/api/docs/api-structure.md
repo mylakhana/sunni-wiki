@@ -95,8 +95,10 @@ All routes are `GET`, under `/v1`, and only expose books with `published = true`
 | `/authors`, `/authors/:slug` | list is paginated; detail includes `books` |
 | `/books?authorSlug&categorySlug` | paginated, newest first (`createdAt desc, id desc`) |
 | `/books/:slug` | book + `volumes` (with `chapterCount` and `topLevelCount`) |
-| `/books/:slug/chapters?volume&parentId` | TOC without text; top-level chapters unless `parentId`; max limit 500 |
+| `/books/:slug/chapters?volume&parentId` | TOC without text; top-level chapters unless `parentId`; max limit 500; level 0/1/2 items also carry `markdownChars` (own) and `subtreeChars` (self + descendants), both from `content.markdown_chars` |
 | `/books/:slug/chapters/:chapterSlug` | titles, volume, breadcrumb, prev/next, `tei` |
+| `/books/:slug/chapters/:chapterSlug/markdown` | `{data:{id,slug,title,breadcrumb,markdown,chars,updatedAt}}`; TEI converted to Markdown on the fly (see format below); `CACHE.chapter` + ETag |
+| `/books/:slug/context-units?node=<id>` | descendant level 1/2 units that own content, reading order, each `{id,slug,title,markdownChars}`, plus `totalChars`; 413 above the cap |
 
 Files: `routes/v1/{categories,authors,books}.ts`, services `library.service.ts` / `chapter.service.ts` / `pagination.ts`, schemas `common.ts` / `library.ts`.
 
@@ -109,3 +111,20 @@ Files: `routes/v1/{categories,authors,books}.ts`, services `library.service.ts` 
 - Queries use Prisma `select` only; indexes: `books(published, createdAt)`, `categories(sort)`, `chapters(bookId, volumeId, parentId, sort)`.
 - Tests: `pnpm test` (`test/smoke.ts`, Fastify `app.inject` against the real DB).
 - `scripts/seed_fatawa_razawiyyah.py` sets `published=1` but its clean step deletes imported chapters; re-run `import_fatawa.py` after it.
+- Env `AI_MAX_CONTEXT_TOKENS` (default 200000): cap for Ask-AI context; tokens are estimated as `ceil(chars / 3)`.
+
+### Markdown format (`services/tei-markdown.service.ts`)
+Pure function, TEI fragment -> compact Markdown. Arabic/Urdu text is kept verbatim.
+
+| TEI | Markdown |
+|---|---|
+| `<head>` / section titles | `#`..`######` by nesting depth, with the anchor kept as `{#s-...}` |
+| question / answer blocks | paragraphs prefixed `Q:` / `A:` |
+| `<q>`, `<quote>`, `<cit>` | `> ` blockquote |
+| `<note>` footnotes | `[^n]` reference + `[^n]: text` definition at the end |
+| page breaks (`<pb>`) | `[p. N]` marker |
+| `<hi>`, `<foreign>` and other inline wrappers | flattened to plain text |
+| `<p>`, `<l>`/`<lg>` | paragraphs / lines separated by blank lines |
+| `<figure>`, `<graphic>`, images, empty anchors, other noise | dropped |
+
+`content.markdown_chars` stores the converted length (backfilled by `scripts/backfill-markdown-chars.ts`).

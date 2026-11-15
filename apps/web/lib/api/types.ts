@@ -14,9 +14,11 @@ export type BookDto = {
 }
 type TitlesDto = { titleEn: Nullable<string>; titleAr: Nullable<string>; titleUr: Nullable<string> }
 export type VolumeDto = { id: number; slug: string; sort: number } & TitlesDto & { chapterCount: number; topLevelCount: number }
-export type BookDetailDto = BookDto & { volumes: VolumeDto[] }
+export type BookDetailDto = BookDto & { author: BookDto["author"] & { prompt: Nullable<string> }; volumes: VolumeDto[] }
 export type AuthorDetailDto = AuthorDto & { books: BookDto[] }
-export type ChapterListItemDto = { id: number; slug: string; sort: number; parentId: Nullable<number>; volumeSlug: Nullable<string>; hasChildren: boolean; level: 0 | 1 | 2 | 3; anchorId: Nullable<string> } & TitlesDto
+export type ChapterListItemDto = { id: number; slug: string; sort: number; parentId: Nullable<number>; volumeSlug: Nullable<string>; hasChildren: boolean; level: 0 | 1 | 2 | 3; anchorId: Nullable<string>
+  /** Own Markdown size (null for groups / level 3) and self + descendant units (null if unknown). */
+  markdownChars?: Nullable<number>; subtreeChars?: Nullable<number> } & TitlesDto
 export type ChapterLinkDto = { slug: string } & TitlesDto
 export type ChapterDetailDto = {
   id: number; slug: string
@@ -27,3 +29,12 @@ export type ChapterDetailDto = {
   prev: Nullable<ChapterLinkDto>; next: Nullable<ChapterLinkDto>
   tei: Nullable<string>
 } & TitlesDto
+
+export type ChapterMarkdownDto = {
+  id: number; slug: string
+  title: { en: Nullable<string>; ar: Nullable<string>; ur: Nullable<string> }
+  breadcrumb: ({ id: number; slug: string; level: 0 | 1 | 2 | 3 } & TitlesDto)[]
+  markdown: string; chars: number; updatedAt: string
+}
+export type ContextUnitDto = { id: number; slug: string; level: 0 | 1 | 2 | 3; markdownChars: number } & TitlesDto
+export type ContextUnitsDto = { units: ContextUnitDto[]; totalChars: number; maxChars: number; maxTokens: number }

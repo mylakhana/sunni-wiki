@@ -120,6 +120,7 @@ export class LibraryService {
       where: { slug, published: true },
       select: {
         ...bookSelect,
+        author: { select: { id: true, slug: true, nameEn: true, nameAr: true, nameUr: true, prompt: true } }, // detail only: the AI persona prompt
         volumes: {
           orderBy: [{ sort: "asc" }, { id: "asc" }],
           select: {

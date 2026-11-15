@@ -3,7 +3,7 @@
 Source: `data-extracted/01 Fatawa Razaviyya/` (31 `jild` folders + `Images/`, untouched).
 
 ## Run order (from `apps/api`)
-1. `python3 scripts/seed_fatawa_razawiyyah.py` — Author, Category, Book, 31 Volumes (`1a,1b,2..30`). Idempotent.
+1. `python3 scripts/seed_fatawa_razawiyyah.py` — Author, Category, Book, 31 Volumes (`1a,1b,2..30`). Idempotent. The Author row also gets `prompt` (AI persona) from `scripts/prompts/imam-ahmed-raza-khan.md`.
 2. `cd scripts && python3 -m fatawa.build --all` — CSV → `scripts/out/<vol>/chapters.json` + `scripts/out/report.json` (git-ignored). `--dry-run`, `--volume N` supported.
 3. `python3 scripts/import_fatawa.py --all` — wipes the volumes' chapters/content, then inserts. Idempotent.
 
@@ -25,7 +25,7 @@ Result (before the title-matching placement above: 131 booklets, 5183 chapters, 
 The index root (single-level IndexNo, e.g. "فہرست مضامین مفصل" — spelled "فہر ست" in vol 11) is always dropped; rows with a non-numeric IndexNo (vol 27 has one numbered "ز") are skipped and listed as `bad_index_no`.
 
 ## TEI mapping
-h/hc → `<head>`; u/uc/c → `<p xml:lang="ur">`; a → `<p xml:lang="ar">`; ac → `<quote xml:lang="ar">`; q/qc → `<quote type="quran">`; t/tc → `<note type="citation">`; s/sc → `<note type="footnote" place="foot">` (pure separators dropped); i → `<figure><graphic url="Images/NAME"/>`; e/ec → `<p xml:lang="en">`; question/answer → `<ab type="question|answer">`; RTF → inline `<quote type="quran">` / `<foreign xml:lang>` by run font (Quranic_Font = Quran, Nafees Web Naskh/Al_Mushaf = Arabic, Alvi/Aslam = Urdu), bold → `<hi rend="bold">`, tab rows → `<table>`.
+h/hc → `<head>`; u/uc/c → `<p xml:lang="ur">`; a → `<p xml:lang="ar">`; ac → `<quote xml:lang="ar">`; q/qc → `<quote type="quran">`; t/tc → `<note type="citation">`; s/sc → `<note type="footnote" place="foot">` (pure separators dropped); i → `<figure><graphic url="/fatawa-razawiyya/NAME"/>`; e/ec → `<p xml:lang="en">`; question/answer → `<ab type="question|answer">`; RTF → inline `<quote type="quran">` / `<foreign xml:lang>` by run font (Quranic_Font = Quran, Nafees Web Naskh/Al_Mushaf = Arabic, Alvi/Aslam = Urdu), bold → `<hi rend="bold">`, tab rows → `<table>`.
 RTF decoder = copy of `docs/rtf_convert.py` decoder (`scripts/fatawa/rtf_decode.py`); the HTML layer was replaced by the TEI emitter.
 
 **RTF (`w`) row classification** (`tei.py` → `rtf_to_tei`, rules from a survey of all 305 `w` rows in vols 1–30). Per paragraph, using the dominant run's size/colour and the paragraph alignment:
@@ -37,7 +37,7 @@ RTF decoder = copy of `docs/rtf_convert.py` decoder (`scripts/fatawa/rtf_decode.
 ## Known gaps (report-only)
 - Sub-topic anchors are exact only when a heading/question row exists on their page (about 40%); otherwise they point at the start of their page. Nesting below a sub-topic is flat (derive depth from the slug if needed).
 - Book detection is title-based ("کتاب" at top level). Chapter content in volumes with many demoted chapters (e.g. 12, 16, 18–21) is coarse.
-- Images are not copied or renamed; stray files (`xx.jpg`, `zz.jpg`, `2626.jpg`) and the vol-1 prefix ambiguity (1A/1B) are only referenced by name from `TextP=i` rows.
+- Images: a copy of `data-extracted/.../Images/` (original untouched) lives in `apps/web/public/fatawa-razawiyya/` (folder = book slug) and is served at `/fatawa-razawiyya/NAME`; `IMAGE_URL_PREFIX` in `scripts/fatawa/tei.py` prepends that path. Files are not renamed; stray files (`xx.jpg`, `zz.jpg`, `2626.jpg`) and the vol-1 prefix ambiguity (1A/1B) are only referenced by name from `TextP=i` rows.
 - A few TOC nodes point to pages without rows (vols 6, 13, 15, 27): listed as `toc_dropped_no_page` in the report; vol 4 has an outlier PageNo 2323.
 
 ## API & reader behaviour (levels)

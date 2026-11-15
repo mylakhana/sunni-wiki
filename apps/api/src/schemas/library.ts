@@ -80,6 +80,7 @@ export const volumeSchema = z
   .describe("Volume")
 
 export const bookDetailSchema = bookSchema.extend({
+  author: authorRef.extend({ prompt: ns("AI persona / system prompt of the author") }),
   volumes: z.array(volumeSchema).describe("Volumes ordered by sort"),
 })
 
@@ -103,6 +104,8 @@ export const chapterListItemSchema = z
     level: z.number().int().describe("0 = group (title only, not readable), 1 = booklet (رسالہ), 2 = chapter, 3 = sub-topic inside a booklet/chapter"),
     anchorId: ns("Sub-topics only: id of the anchor inside the parent chapter's text"),
     hasChildren: z.boolean().describe("Whether it can be expanded: a booklet has chapters; other entries have child entries"),
+    markdownChars: z.number().int().nullable().describe("Characters of the entry's own text as Markdown (level 1/2); null for groups, sub-topics and entries not backfilled yet"),
+    subtreeChars: z.number().int().nullable().describe("Markdown characters of the entry plus everything below it (level 0/1/2); null for sub-topics or when a unit below is not backfilled yet"),
   })
   .describe("Chapter table-of-contents entry")
 
@@ -133,3 +136,40 @@ export const chapterDetailSchema = z
     tei: ns("TEI XML fragment (content slug 'default', else first content row)"),
   })
   .describe("Chapter with text")
+
+export const contextUnitsQuerySchema = z.object({
+  node: z.string().min(1).max(150).describe("Volume slug (wins) or chapter id; prefix with volume: or chapter: to disambiguate"),
+})
+
+export const chapterMarkdownSchema = z
+  .object({
+    id: z.number().int().describe("Chapter id"),
+    slug: s("Chapter slug"),
+    title: z.object({ en: ns("English title"), ar: ns("Arabic title"), ur: ns("Urdu title") }).describe("Chapter title per language"),
+    breadcrumb: z
+      .array(ref.extend({ id: z.number().int().describe("Chapter id"), level: z.number().int().describe("0 = group, 1 = booklet, 2 = chapter") }))
+      .describe("Ancestors, root first, excluding the chapter itself"),
+    markdown: s("Chapter text as compact Markdown (format: apps/api/docs/api-structure.md)"),
+    chars: z.number().int().describe("Length of `markdown` in characters (= content.markdown_chars)"),
+    updatedAt: s("ISO time the text was last changed; part of the client cache key"),
+  })
+  .describe("Chapter text as Markdown")
+
+export const contextUnitSchema = z
+  .object({
+    id: z.number().int().describe("Chapter id of the unit"),
+    slug: s("Chapter slug"),
+    level: z.number().int().describe("1 = booklet (its own intro text), 2 = chapter"),
+    ...titleFields,
+    markdownChars: z.number().int().describe("Characters of the unit's Markdown"),
+  })
+  .describe("Selectable Ask-AI unit")
+
+export const contextUnitsSchema = z
+  .object({
+    units: z.array(contextUnitSchema).describe("Units in reading order"),
+    totalChars: z.number().int().describe("Sum of markdownChars"),
+    maxChars: z.number().int().describe("Server cap in characters (AI_MAX_CONTEXT_TOKENS * 3)"),
+    maxTokens: z.number().int().describe("Server cap in estimated tokens (ceil(chars / 3))"),
+  })
+  .describe("Context units below a node")

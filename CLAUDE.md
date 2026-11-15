@@ -53,5 +53,5 @@ We have a huge collection of data in messy CSV files. It is converted and import
 
 ### Fatawa Razawiyyah import notes
 - Source: `data-extracted/01 Fatawa Razaviyya/` (per-volume `IndexContainer.csv`, `Map.csv`, `TextContainer.csv`; `Images/` stays as-is). Details in `apps/api/scripts/README.md`.
-- Run order (from `apps/api`): `python3 scripts/seed_fatawa_razawiyyah.py` → `cd scripts && python3 -m fatawa.build --all` → `python3 scripts/import_fatawa.py --all`. Full details: `apps/api/docs/data-import-fatawa-razawiyyah.md`.
+- Run order (from `apps/api`): `python3 scripts/seed_fatawa_razawiyyah.py` → `cd scripts && python3 -m fatawa.build --all` → `python3 scripts/import_fatawa.py --all` (which ends by running `pnpm backfill:markdown` to fill `content.markdown_chars`; run it alone with `pnpm backfill:markdown [--all]`). Full details: `apps/api/docs/data-import-fatawa-razawiyyah.md`.
 - Never modify or move files in `data-extracted/` (incl. `Images/`).

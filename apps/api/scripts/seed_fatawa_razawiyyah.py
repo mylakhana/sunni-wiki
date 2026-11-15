@@ -33,6 +33,8 @@ AUTHOR = dict(
     nameUr="اعلیٰ حضرت امام احمد رضا خان",
     birthYear=1856,
     deathYear=1921,
+    # AI persona prompt (kept in its own file; upserted with the author)
+    prompt=(Path(__file__).parent / "prompts" / "imam-ahmed-raza-khan.md").read_text(encoding="utf-8").strip(),
 )
 CATEGORY = dict(slug="fatawa", titleEn="Fatawa", titleAr="فتاوى", titleUr="فتاویٰ", sort=0)
 BOOK = dict(
