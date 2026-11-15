@@ -2,6 +2,9 @@ import { bookHue } from "@/lib/ui"
 import type { Author, Book, BookDetail, Category, ChapterDetail, ChapterItem, ChapterLink, ContextUnits, Volume } from "@/lib/types"
 import type { AuthorDto, BookDetailDto, BookDto, CategoryDto, ChapterDetailDto, ChapterLinkDto, ChapterListItemDto, ContextUnitsDto } from "./types"
 
+/** Shown wherever a book has no author registered yet. */
+export const UNKNOWN_AUTHOR = "Unknown author"
+
 export const mapCategory = (c: CategoryDto): Category => ({
   id: c.slug, en: c.titleEn, ar: c.titleAr, ur: c.titleUr, desc: c.description, bookCount: c.bookCount,
 })
@@ -14,12 +17,12 @@ export const mapAuthor = (a: AuthorDto): Author => ({
 export const mapBook = (b: BookDto): Book => ({
   id: b.slug, title: b.titleEn, ar: b.titleAr, ur: b.titleUr, blurb: b.description?.trim() || null,
   langs: b.languages, volumes: b.volumeCount, added: b.createdAt, cover: b.coverImage, hue: bookHue(b.slug),
-  author: b.author.slug, authorName: b.author.nameEn, cat: b.category.slug, catName: b.category.titleEn,
+  author: b.author?.slug ?? null, authorName: b.author?.nameEn ?? UNKNOWN_AUTHOR, cat: b.category.slug, catName: b.category.titleEn,
 })
 
 export const mapBookDetail = (b: BookDetailDto): BookDetail => ({
   ...mapBook(b),
-  authorPrompt: b.author.prompt?.trim() || null,
+  authorPrompt: b.author?.prompt?.trim() || null,
   volumeList: [...b.volumes].sort((x, y) => x.sort - y.sort).map((v): Volume => ({
     id: String(v.id), slug: v.slug, sort: v.sort, en: v.titleEn, ar: v.titleAr, ur: v.titleUr, chapterCount: v.chapterCount, topLevelCount: v.topLevelCount ?? v.chapterCount, // older cached API payloads lack it
   })),

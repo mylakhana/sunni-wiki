@@ -13,6 +13,7 @@ DATA_ROOT = API_DIR.parents[2] / "data-extracted"  # v3/data-extracted (sibling 
 CATEGORIES = {
     "hadith": dict(slug="hadith", titleEn="Hadith", titleAr="الحديث", titleUr="حدیث", sort=2),
     "tafseer": dict(slug="tafseer", titleEn="Tafseer", titleAr="التفسير", titleUr="تفسیر", sort=3),
+    "durood": dict(slug="durood", titleEn="Durood & Wazaif", titleAr="الصلوات والأوراد", titleUr="درود و وظائف", sort=4),
 }
 
 FAIZAN_DESCRIPTION = """شیخ الاسلام الحافظ الامام محی الدین ابوزکریا یحیٰی بن شَرَف نَوَوِی عَلَیْہِ رَحْمَۃُ اللہِ الْقَوِی (متوفّٰی۶۷۲ہجری)
@@ -91,7 +92,30 @@ BOOKS = {
         volumes=list(range(1, 11)),
         demote_hadith=False,
     ),
+    # Book 06: no volumes (TextContainer.csv / IndexContainer.csv directly in the book folder). volumes=None.
+    "dalail": dict(
+        dir="06 Dalail ul Khairat",
+        author=dict(
+            slug="imam-jazuli",
+            nameEn="Shaikh Muhammad bin Sulaiman Al-Jazuli",
+            nameAr="الشيخ محمد بن سليمان الجزولي",
+            nameUr="شیخ محمد بن سلیمان جزولی",
+        ),
+        category="durood",
+        book=dict(
+            slug="dalail-ul-khairat",
+            titleEn="Dalail ul Khairat",
+            titleAr="دلائل الخيرات",
+            titleUr="دلائل الخیرات",
+            languages='["ar","ur"]',
+            published=1,
+        ),
+        volumes=None,
+        demote_hadith=False,
+    ),
 }
+
+NO_VOLUME = ""  # pseudo volume slug of volume-less books (out/<book>/_/, chapters.volumeId = NULL)
 
 
 def folder_number(name: str) -> int | None:
@@ -104,6 +128,8 @@ def volume_folders(book: str, data_root: Path = DATA_ROOT) -> dict[str, Path]:
     """slug -> folder, validated against the expected volume list of the book."""
     cfg = BOOKS[book]
     base = data_root / cfg["dir"]
+    if cfg["volumes"] is None:
+        return {NO_VOLUME: base}
     found = {}
     for p in base.iterdir():
         if p.is_dir():
@@ -118,6 +144,8 @@ def volume_folders(book: str, data_root: Path = DATA_ROOT) -> dict[str, Path]:
 
 
 def volume_slugs(book: str) -> list[str]:
+    if BOOKS[book]["volumes"] is None:
+        return [NO_VOLUME]
     return [str(n) for n in BOOKS[book]["volumes"]]
 
 

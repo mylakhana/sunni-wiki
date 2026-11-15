@@ -80,7 +80,7 @@ export class ExportService {
     <fileDesc>
       <titleStmt>
         <title>${esc(p.title)}</title>
-        <author>${esc(book.author.nameEn)}</author>
+        ${book.author ? `<author>${esc(book.author.nameEn)}</author>` : ""}
       </titleStmt>
       <publicationStmt><p>Exported from the library.</p></publicationStmt>
       <sourceDesc><p>${esc(bookTitle)}</p></sourceDesc>

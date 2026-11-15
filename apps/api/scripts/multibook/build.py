@@ -245,7 +245,7 @@ def build_volume(book: str, slug: str, folder: Path, report: dict) -> list[dict]
 
     def add(no, parent, title, level, xml=None, anchor=None, title_en=None):
         k = (parent, level == 3)
-        out.append({"key": no, "parent": parent, "sort": sib[k], "slug": f"{slug}-{no}", "titleUr": title,
+        out.append({"key": no, "parent": parent, "sort": sib[k], "slug": f"{slug}-{no}" if slug else no, "titleUr": title,
                     "titleEn": title_en, "level": level, "anchorId": anchor, "tei": xml})
         sib[k] += 1
 
@@ -316,11 +316,11 @@ def build_book(book: str, wanted: list[str] | None, dry: bool, data_root: Path =
     for slug in wanted or config.volume_slugs(book):
         chapters = build_volume(book, slug, folders[slug], report)
         r = report["volumes"][slug]
-        print(f'{book}:{slug:>3} elements {r["elements"]:>6} parity={r["parity_ok"]} toc {r["toc_nodes"]:>4} chapters {r["chapters"]:>3} '
+        print(f'{book}:{slug or '-':>3} elements {r["elements"]:>6} parity={r["parity_ok"]} toc {r["toc_nodes"]:>4} chapters {r["chapters"]:>3} '
               f'subs {r["subtopics"]:>4} placed {r["placed"]} unplaced_ch {len(r["chapters_unplaced"])} '
               f'collisions {len(r["chapter_collisions"])} dropped_sub {len(r["subtopics_dropped"])} clamped {r["pages_clamped"]} xml_err {r["xml_error_count"]}')
         if not dry:
-            d = od / slug
+            d = od / (slug or "_")
             d.mkdir(parents=True, exist_ok=True)
             (d / "chapters.json").write_text(json.dumps(chapters, ensure_ascii=False), encoding="utf-8")
     if not dry:

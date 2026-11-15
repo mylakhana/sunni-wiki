@@ -251,7 +251,9 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
               <div className="p-2">
                 <div className="mx-auto w-28"><BookCover book={book} /></div>
                 <h2 className="mt-5 text-center text-lg font-semibold">{book.title}</h2>
-                <Link href={`/authors/${book.author}`} className="c-accent block text-center text-sm">{book.authorName}</Link>
+                {book.author
+                  ? <Link href={`/authors/${book.author}`} className="c-accent block text-center text-sm">{book.authorName}</Link>
+                  : <p className="c-muted text-center text-sm">{book.authorName}</p>}
                 {book.blurb && (/[؀-ۿ]/.test(book.blurb)
                   ? <p dir="rtl" lang="ur" className="c-muted font-ur mt-4 whitespace-pre-line text-right text-base leading-[2.2]">{book.blurb}</p>
                   : <p className="c-muted mt-4 text-sm leading-relaxed">{book.blurb}</p>)}

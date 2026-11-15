@@ -3,7 +3,7 @@
 
 Run (from apps/api):
     python3 scripts/import_all.py                    # all books
-    python3 scripts/import_all.py --book bahar       # only one: fatawa | bahar | miraat | faizan | siraat
+    python3 scripts/import_all.py --book bahar       # only one: fatawa | bahar | miraat | faizan | siraat | dalail
     python3 scripts/import_all.py --skip-seed        # skip the "pnpm db:seed" step
 
 Steps per book: seed (scoped clean + volumes) -> build (CSV -> TEI JSON) -> import (DB).
@@ -46,6 +46,12 @@ BOOKS = {
         ([PY, "scripts/seed_books.py", "--book", "siraat"], API),
         ([PY, "-m", "multibook.build", "--book", "siraat", "--all"], SCRIPTS),
         ([PY, "scripts/import_books.py", "--book", "siraat", "--all"], API),
+    ],
+    # book 06: volume-less (config volumes=None)
+    "dalail": [
+        ([PY, "scripts/seed_books.py", "--book", "dalail"], API),
+        ([PY, "-m", "multibook.build", "--book", "dalail", "--all"], SCRIPTS),
+        ([PY, "scripts/import_books.py", "--book", "dalail", "--all"], API),
     ],
 }
 

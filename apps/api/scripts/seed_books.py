@@ -30,11 +30,11 @@ def seed_book(conn, book: str) -> None:
         cur.execute("UPDATE chapters SET parentId=NULL WHERE bookId=%s", (book_id,))
         cur.execute("DELETE FROM chapters WHERE bookId=%s", (book_id,))
         cur.execute("DELETE FROM volumes WHERE bookId=%s", (book_id,))
-        for i, n in enumerate(cfg["volumes"], start=1):
+        for i, n in enumerate(cfg["volumes"] or [], start=1):  # volumes=None: volume-less book
             cur.execute("INSERT INTO volumes (bookId, slug, sort, titleEn, titleUr) VALUES (%s,%s,%s,%s,%s)",
                         (book_id, str(n), i, f"Volume {n}", f"جلد {n}"))
     conn.commit()
-    print(f"{book}: author#{author_id} category#{category_id} book#{book_id} + {len(cfg['volumes'])} volumes")
+    print(f"{book}: author#{author_id} category#{category_id} book#{book_id} + {len(cfg['volumes'] or [])} volumes")
 
 
 def main() -> None:

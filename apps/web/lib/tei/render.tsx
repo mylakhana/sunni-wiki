@@ -73,13 +73,19 @@ function block(n: XNode, key: number, isInline: boolean): ReactNode {
     case "p":
       return <p key={key} className={`${langClass(lang)} tei-block${a["@_type"] === "translation" ? " tei-translation" : ""}${a["@_rend"] === "center" || (lang === "ar" && centerArabicP(c)) ? " text-center" : ""}`} dir={dirOf(lang)}>{inline(c)}</p>
     case "quote": {
-      if (isInline) return <q key={key} lang={lang} className={fontClass(lang)}>{inline(c)}</q>
+      if (isInline) { const ql = a["@_type"] === "quran" || a["@_type"] === "hadith" || a["@_type"] === "dua" ? "ar" : lang; return <q key={key} lang={ql} className={fontClass(ql)}>{inline(c)}</q> }
       if (a["@_type"] === "quran") {
         return (
           <figure key={key} className="blk-verse tei-block">
             <div className="kind">Qur’an</div>
-            <p className={`${langClass(lang ?? "ar")} mb-0!`} dir="rtl">{inline(c)}</p>
+            <p className="blk-ar mb-0!" lang="ar" dir="rtl">{inline(c)}</p>
           </figure>
+        )
+      }
+      const qt = a["@_type"]
+      if (qt === "hadith" || qt === "dua") {
+        return (
+          <blockquote key={key} className={`tei-${qt} tei-block ${langClass(lang)}`} dir={dirOf(lang)}>{inline(c)}</blockquote>
         )
       }
       return (

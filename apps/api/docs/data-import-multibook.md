@@ -8,6 +8,7 @@ Run (from `apps/api`): `python3 scripts/import_all.py --skip-seed --book miraat 
 |---|---|---|---|---|
 | miraat | `miraat-ul-manajeeh` — Miraat ul Manajeeh Sharah Mishkaat Ul Masabeeh | `hakeem-ul-ummat-mufti-ahmed-yaar-khan-naeemi-badayuni` | `hadith` | 1-8 |
 | faizan | `faizan-e-riaz-ul-saliheen` (description = the Urdu title text supplied by the owner) | `hafiz-imam-muhiuddin-abu-zakariyya-yahya-bin-sharaf-nawawi` | `hadith` | 1,2,3,5,6,7 (**Jild 4 not in the extracted data**) |
+| dalail | `dalail-ul-khairat` — Dalail ul Khairat (book 06, **no volumes**) | `imam-jazuli` (Shaikh Muhammad bin Sulaiman Al-Jazuli) | `durood` | none |
 | siraat | `siraat-ul-jinaan` — Siraat ul Jinaan Fi Tafseer Al Quran | `mufti-muhammad-qassim-attari` | `tafseer` | 1-10 |
 
 New categories `hadith` (sort 2) and `tafseer` (sort 3) are created by the seed (upsert). No `Images/` folders exist for these books.
@@ -32,3 +33,6 @@ miraat 288 chapters / 99 with content; faizan 6046 / 278; siraat 3472 / 161. No 
 ## Known gaps
 - Faizan chapter granularity follows the source TOC (باب/کتاب chapters; volumes without باب nodes such as vols 2 and 5 are chapter-per-entry/section).
 - Sub-topic anchors inside RTF pages are matched by heading text; ~5% fall back to the page's first paragraph.
+
+## Book 06 — Dalail ul Khairat (volume-less)
+`volumes=None` in `config.BOOKS`: files sit directly in `data-extracted/06 Dalail ul Khairat/`; no Volume rows, `chapters.volumeId = NULL`, output in `out/dalail-ul-khairat/_/`, chapter slugs = IndexNo (`1.01`). Same RTF-per-page format as Siraat (335 pages -> 22 TOC chapters + front matter, parity OK). Run: `python3 scripts/import_all.py --skip-seed --book dalail`. New category `durood`.

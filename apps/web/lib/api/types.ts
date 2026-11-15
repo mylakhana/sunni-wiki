@@ -9,12 +9,12 @@ export type AuthorDto = { id: number; slug: string; nameEn: string; nameAr: Null
 export type BookDto = {
   id: number; slug: string; titleEn: string; titleAr: Nullable<string>; titleUr: Nullable<string>; description: Nullable<string>
   languages: string[]; coverImage: Nullable<string>; volumeCount: number; createdAt: string
-  author: { id: number; slug: string; nameEn: string; nameAr: Nullable<string>; nameUr: Nullable<string> }
+  author: Nullable<{ id: number; slug: string; nameEn: string; nameAr: Nullable<string>; nameUr: Nullable<string> }> // null until the author is registered
   category: { id: number; slug: string; titleEn: string; titleAr: Nullable<string>; titleUr: Nullable<string> }
 }
 type TitlesDto = { titleEn: Nullable<string>; titleAr: Nullable<string>; titleUr: Nullable<string> }
 export type VolumeDto = { id: number; slug: string; sort: number } & TitlesDto & { chapterCount: number; topLevelCount: number }
-export type BookDetailDto = BookDto & { author: BookDto["author"] & { prompt: Nullable<string> }; volumes: VolumeDto[] }
+export type BookDetailDto = BookDto & { author: Nullable<NonNullable<BookDto["author"]> & { prompt: Nullable<string> }>; volumes: VolumeDto[] }
 export type AuthorDetailDto = AuthorDto & { books: BookDto[] }
 export type ChapterListItemDto = { id: number; slug: string; sort: number; parentId: Nullable<number>; volumeSlug: Nullable<string>; hasChildren: boolean; level: 0 | 1 | 2 | 3; anchorId: Nullable<string>
   /** Own Markdown size (null for groups / level 3) and self + descendant units (null if unknown). */

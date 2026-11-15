@@ -10,6 +10,7 @@ A free, public library of trusted Islamic books, readable in Arabic, Urdu and En
 ## Data model (`apps/api/prisma/schema.prisma`)
 `Category 1─* Book *─1 Author`; `Book 1─* Volume (optional) 1─* Chapter`; `Book 1─* Chapter` (always set, so volume-less books work); `Chapter` nests via `parentId`; `Chapter 1─* Content` (TEI XML fragment, one row per chapter in practice, slug `default`).
 - Only books with `published = true` are exposed by the API.
+- `Book.authorId` is **optional** (authors are registered later; migration `20261117000000_book_author_optional`). The API returns `author: null`; the web shows the placeholder "Unknown author" (no link, generic AI persona, citations use the placeholder). Volumes are optional too: volume-less books just have chapters with `volumeId = null`.
 - Titles/names are trilingual (`En` required, `Ar`/`Ur` optional). Chapter titles are all optional.
 - `Book.languages` is JSON, e.g. `["ar","ur"]`. `Book.coverImage` null → UI gradient cover.
 - Text source of truth = TEI XML (`content.tei`). Legacy CSV import: `apps/api/docs/data-import-fatawa-razawiyyah.md`.

@@ -24,7 +24,7 @@ from seed_fatawa_razawiyyah import connect, load_database_url  # noqa: E402  (ge
 def import_book(conn, book: str, wanted: list[str]) -> None:
     out = config.out_dir(book)
     for s in wanted:
-        if not (out / s / "chapters.json").exists():
+        if not (out / (s or "_") / "chapters.json").exists():
             sys.exit(f"{book}: missing output for volume {s}: run `python3 -m multibook.build --book {book} --all` first")
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     with conn.cursor() as cur:
@@ -34,15 +34,20 @@ def import_book(conn, book: str, wanted: list[str]) -> None:
             sys.exit(f"{book}: book not found — run seed_books.py first")
         book_id = row[0]
         for slug in wanted:
-            cur.execute("SELECT id FROM volumes WHERE bookId=%s AND slug=%s", (book_id, slug))
-            vrow = cur.fetchone()
-            if not vrow:
-                sys.exit(f"{book}: volume {slug} missing — run seed_books.py first")
-            vol_id = vrow[0]
-            cur.execute("DELETE c FROM content c JOIN chapters ch ON ch.id=c.chapterId WHERE ch.volumeId=%s", (vol_id,))
-            cur.execute("UPDATE chapters SET parentId=NULL WHERE volumeId=%s", (vol_id,))
-            cur.execute("DELETE FROM chapters WHERE volumeId=%s", (vol_id,))
-            chapters = json.loads((out / slug / "chapters.json").read_text(encoding="utf-8"))
+            vol_id = None  # volume-less book (config volumes=None): chapters.volumeId stays NULL
+            if slug:
+                cur.execute("SELECT id FROM volumes WHERE bookId=%s AND slug=%s", (book_id, slug))
+                vrow = cur.fetchone()
+                if not vrow:
+                    sys.exit(f"{book}: volume {slug} missing — run seed_books.py first")
+                vol_id = vrow[0]
+                scope, arg = "ch.volumeId", vol_id
+            else:
+                scope, arg = "ch.bookId", book_id
+            cur.execute(f"DELETE c FROM content c JOIN chapters ch ON ch.id=c.chapterId WHERE {scope}=%s", (arg,))
+            cur.execute(f"UPDATE chapters ch SET parentId=NULL WHERE {scope}=%s", (arg,))
+            cur.execute(f"DELETE ch FROM chapters ch WHERE {scope}=%s", (arg,))
+            chapters = json.loads((out / (slug or "_") / "chapters.json").read_text(encoding="utf-8"))
             ids: dict[str, int] = {}
             n_content = 0
             for c in chapters:  # parents always precede children
@@ -58,9 +63,10 @@ def import_book(conn, book: str, wanted: list[str]) -> None:
                     cur.execute("INSERT INTO content (chapterId, slug, tei, version, updatedAt) VALUES (%s,'default',%s,1,%s)",
                                 (cur.lastrowid, c["tei"], now))
                     n_content += 1
-            cur.execute("UPDATE volumes SET status=%s WHERE id=%s", ("active" if n_content else "inactive", vol_id))
+            if vol_id:
+                cur.execute("UPDATE volumes SET status=%s WHERE id=%s", ("active" if n_content else "inactive", vol_id))
             conn.commit()
-            print(f"{book} vol {slug:>3}: {len(chapters)} chapters, {n_content} with content")
+            print(f"{book} vol {slug or '-':>3}: {len(chapters)} chapters, {n_content} with content")
 
 
 def main() -> None:

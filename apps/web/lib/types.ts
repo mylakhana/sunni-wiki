@@ -22,8 +22,8 @@ export type Book = {
   added: string // ISO date
   cover: string | null
   hue: [string, string]
-  author: string // author slug
-  authorName: string
+  author: string | null // author slug (null = no author registered yet)
+  authorName: string // "Unknown author" when there is none
   cat: string // category slug
   catName: string
 }

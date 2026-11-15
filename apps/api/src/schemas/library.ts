@@ -31,15 +31,17 @@ export const authorSchema = z
   })
   .describe("Author")
 
+const authorRefShape = {
+  id: z.number().int().describe("Author id"),
+  slug: s("Author slug"),
+  nameEn: s("English name"),
+  nameAr: ns("Arabic name"),
+  nameUr: ns("Urdu name"),
+}
 const authorRef = z
-  .object({
-    id: z.number().int().describe("Author id"),
-    slug: s("Author slug"),
-    nameEn: s("English name"),
-    nameAr: ns("Arabic name"),
-    nameUr: ns("Urdu name"),
-  })
-  .describe("Author summary")
+  .object(authorRefShape)
+  .nullable()
+  .describe("Author summary (null until the author is registered)")
 
 const categoryRef = z
   .object({
@@ -80,7 +82,10 @@ export const volumeSchema = z
   .describe("Volume")
 
 export const bookDetailSchema = bookSchema.extend({
-  author: authorRef.extend({ prompt: ns("AI persona / system prompt of the author") }),
+  author: z
+    .object({ ...authorRefShape, prompt: ns("AI persona / system prompt of the author") })
+    .nullable()
+    .describe("Author (null until registered)"),
   volumes: z.array(volumeSchema).describe("Volumes ordered by sort"),
 })
 

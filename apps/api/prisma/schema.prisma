@@ -58,7 +58,7 @@ model Author {
 model Book {
   id          Int      @id @default(autoincrement())
   slug        String   @unique @db.VarChar(150) // used in URLs: /books/[slug]
-  authorId    Int
+  authorId    Int? // optional: authors can be registered later
   categoryId  Int
   titleEn     String   @db.VarChar(255)
   titleAr     String?  @db.VarChar(255)
@@ -73,7 +73,7 @@ model Book {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  author   Author    @relation(fields: [authorId], references: [id])
+  author   Author?   @relation(fields: [authorId], references: [id])
   category Category  @relation(fields: [categoryId], references: [id])
   volumes  Volume[]
   chapters Chapter[]
