@@ -45,6 +45,11 @@ export async function apiItem<T>(path: string, query?: Query): Promise<T> {
   return (await request<ItemResponse<T>>(path, query)).data
 }
 
+/** GET a bare (non-enveloped) JSON resource, e.g. /search. */
+export async function apiGet<T>(path: string, query?: Query): Promise<T> {
+  return request<T>(path, query)
+}
+
 /** GET every page of a list resource by following `nextCursor`. */
 export async function apiAll<T>(path: string, query: Query = {}, limit = 200): Promise<T[]> {
   const out: T[] = []

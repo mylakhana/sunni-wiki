@@ -128,6 +128,20 @@ await t("validation 400 shape + unpublished hidden", async () => {
   }
 })
 
+await t("search: 400 on bad query, 503 or well-formed result", async () => {
+  assert.equal((await get("/v1/search?q=%20%20")).statusCode, 400)
+  assert.equal((await get("/v1/search")).statusCode, 400)
+  const r = await get("/v1/search?q=" + encodeURIComponent("نماز") + "&mode=phrase&pageSize=2")
+  if (r.statusCode === 503) {
+    assert.equal(json(r).error, "Service Unavailable") // OpenSearch down / not indexed: skip shape checks
+    return
+  }
+  assert.equal(r.statusCode, 200)
+  const b = json(r)
+  assert.ok(Array.isArray(b.groups) && Array.isArray(b.facets.books))
+  assert.equal(typeof b.total, "number")
+})
+
 await t("CORS restricted to WEB_ORIGIN", async () => {
   const r = await app.inject({ method: "GET", url: "/v1/health", headers: { origin: "http://localhost:3000" } })
   assert.equal(r.headers["access-control-allow-origin"], "http://localhost:3000")

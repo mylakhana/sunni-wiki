@@ -1,3 +1,4 @@
+import { searchPing } from "../config/search.js"
 import type { PrismaClient } from "../generated/prisma/client.js"
 
 export class HealthService {
@@ -10,6 +11,7 @@ export class HealthService {
     } catch {
       database = "down"
     }
-    return { status: "ok" as const, uptime: process.uptime(), database }
+    const search: "up" | "down" = (await searchPing()) ? "up" : "down"
+    return { status: "ok" as const, uptime: process.uptime(), database, search }
   }
 }

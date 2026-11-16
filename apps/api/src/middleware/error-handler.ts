@@ -7,6 +7,7 @@ const NAMES: Record<number, string> = {
   404: "Not Found",
   413: "Payload Too Large",
   429: "Too Many Requests",
+  503: "Service Unavailable",
 }
 
 export function errorHandler(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
@@ -27,7 +28,7 @@ export function errorHandler(error: FastifyError, request: FastifyRequest, reply
     message = "Resource not found"
   }
 
-  if (statusCode >= 500) {
+  if (statusCode >= 500 && statusCode !== 503) {
     request.log.error({ err: error, reqId: request.id }, "request failed")
     message = "Internal Server Error"
   } else request.log.warn({ reqId: request.id }, message)

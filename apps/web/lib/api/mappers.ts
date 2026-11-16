@@ -6,16 +6,16 @@ import type { AuthorDto, BookDetailDto, BookDto, CategoryDto, ChapterDetailDto, 
 export const UNKNOWN_AUTHOR = "Unknown author"
 
 export const mapCategory = (c: CategoryDto): Category => ({
-  id: c.slug, en: c.titleEn, ar: c.titleAr, ur: c.titleUr, desc: c.description, bookCount: c.bookCount,
+  id: c.slug, dbId: c.id, en: c.titleEn, ar: c.titleAr, ur: c.titleUr, desc: c.description, bookCount: c.bookCount,
 })
 
 export const mapAuthor = (a: AuthorDto): Author => ({
-  id: a.slug, name: a.nameEn, ar: a.nameAr, ur: a.nameUr, bio: a.bio?.trim() || null, bookCount: a.bookCount,
+  id: a.slug, dbId: a.id, name: a.nameEn, ar: a.nameAr, ur: a.nameUr, bio: a.bio?.trim() || null, bookCount: a.bookCount,
   years: a.birthYear && a.deathYear ? `${a.birthYear} – ${a.deathYear}` : a.birthYear ? `b. ${a.birthYear}` : a.deathYear ? `d. ${a.deathYear}` : null,
 })
 
 export const mapBook = (b: BookDto): Book => ({
-  id: b.slug, title: b.titleEn, ar: b.titleAr, ur: b.titleUr, blurb: b.description?.trim() || null,
+  id: b.slug, dbId: b.id, title: b.titleEn, ar: b.titleAr, ur: b.titleUr, blurb: b.description?.trim() || null,
   langs: b.languages, volumes: b.volumeCount, added: b.createdAt, cover: b.coverImage, hue: bookHue(b.slug),
   author: b.author?.slug ?? null, authorName: b.author?.nameEn ?? UNKNOWN_AUTHOR, cat: b.category.slug, catName: b.category.titleEn,
 })

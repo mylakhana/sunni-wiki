@@ -4,6 +4,8 @@ One config-driven pipeline (`apps/api/scripts/multibook/`) instead of three copi
 
 Run (from `apps/api`): `python3 scripts/import_all.py --skip-seed --book miraat --book faizan --book siraat`, or per step: `scripts/seed_books.py --book X` → `cd scripts && python3 -m multibook.build --book X --all` → `scripts/import_books.py --book X --all`.
 
+After each import (content search): `pnpm search:reindex --book <book-slug>` (from `apps/api`, OpenSearch running) — rebuilds this book's content-search index (see `apps/api/docs/search-index.md`).
+
 | book key | book slug | author slug | category | volumes |
 |---|---|---|---|---|
 | miraat | `miraat-ul-manajeeh` — Miraat ul Manajeeh Sharah Mishkaat Ul Masabeeh | `hakeem-ul-ummat-mufti-ahmed-yaar-khan-naeemi-badayuni` | `hadith` | 1-8 |

@@ -6,6 +6,7 @@ Source: `data-extracted/01 Fatawa Razaviyya/` (31 `jild` folders + `Images/`, un
 1. `python3 scripts/seed_fatawa_razawiyyah.py` — Author, Category, Book, 31 Volumes (`1a,1b,2..30`). Idempotent. The Author row also gets `prompt` (AI persona) from `scripts/prompts/imam-ahmed-raza-khan.md`.
 2. `cd scripts && python3 -m fatawa.build --all` — CSV → `scripts/out/<vol>/chapters.json` + `scripts/out/report.json` (git-ignored). `--dry-run`, `--volume N` supported.
 3. `python3 scripts/import_fatawa.py --all` — wipes the volumes' chapters/content, then inserts. Idempotent.
+4. `pnpm search:reindex --book <book-slug>` (from `apps/api`, OpenSearch running) — rebuilds this book's content-search index (see `apps/api/docs/search-index.md`).
 
 ## Source format
 - `TextContainer.csv` `SNo,Description,PageNo,TextP,DataOrder,Alignment` — rows in reading order. `DataOrder`/`Alignment` always empty. `PageNo` = digital page chunk. `TextP` = paragraph type (h, hc, u, uc, a, ac, q, qc, t, tc, s, sc, i, e/ec, c, **w = RTF blob**). ~30 dirty codes are normalised (`normalize_code`, every remap logged in the report).

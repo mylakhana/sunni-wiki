@@ -52,7 +52,7 @@ def fix() -> None:
             skipped += 1
             continue
         head, sep, inner = src.partition("(")
-        head = re.sub(r"^رسالہ|^رسالۃ", "", head.strip()).strip()
+        head = re.sub(r"^ر\s?س\s?ا\s?ل\s?[ہۃ]", "", head.strip()).strip()
         r["titleAr"] = head
         if sep:
             r["titleUr"] = inner.strip().removesuffix(")").strip()

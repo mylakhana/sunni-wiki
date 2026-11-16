@@ -98,6 +98,7 @@ All routes are `GET`, under `/v1`, and only expose books with `published = true`
 | `/books/:slug/chapters?volume&parentId` | TOC without text; top-level chapters unless `parentId`; max limit 500; level 0/1/2 items also carry `markdownChars` (own) and `subtreeChars` (self + descendants), both from `content.markdown_chars` |
 | `/books/:slug/chapters/:chapterSlug` | titles, volume, breadcrumb, prev/next, `tei` |
 | `/books/:slug/chapters/:chapterSlug/markdown` | `{data:{id,slug,title,breadcrumb,markdown,chars,updatedAt}}`; TEI converted to Markdown on the fly (see format below); `CACHE.chapter` + ETag |
+| `/search?q&mode&lang&…` | content search (OpenSearch), see "Content search" below; 503 when the search engine is down |
 | `/books/:slug/context-units?node=<id>` | descendant level 1/2 units that own content, reading order, each `{id,slug,title,markdownChars}`, plus `totalChars`; 413 above the cap |
 
 Files: `routes/v1/{categories,authors,books}.ts`, services `library.service.ts` / `chapter.service.ts` / `pagination.ts`, schemas `common.ts` / `library.ts`.
@@ -112,6 +113,26 @@ Files: `routes/v1/{categories,authors,books}.ts`, services `library.service.ts` 
 - Tests: `pnpm test` (`test/smoke.ts`, Fastify `app.inject` against the real DB).
 - `scripts/seed_fatawa_razawiyyah.py` sets `published=1` but its clean step deletes imported chapters; re-run `import_fatawa.py` after it.
 - Env `AI_MAX_CONTEXT_TOKENS` (default 200000): cap for Ask-AI context; tokens are estimated as `ceil(chars / 3)`.
+
+### Content search (`GET /v1/search`)
+Full-text search inside the books (no AI). Files: `routes/v1/search.ts`, `schemas/search.ts`, `services/search.service.ts` (+ `search-query.ts` pure query builders), `config/search.ts` (OpenSearch REST wrapper). Index/analyzer details: `docs/search-index.md`. Needs OpenSearch (`docker compose up -d opensearch`, env `SEARCH_URL`, `SEARCH_INDEX_PREFIX`); build the index with `pnpm search:reindex`.
+
+| Query param | Notes |
+|---|---|
+| `q` | required, max 200 chars / 20 words |
+| `mode` | `all` (default: every word in the same chapter), `any`, `phrase` (exact phrase) |
+| `lang` | `all` (default), `ur`, `ar`, `en` — only search this language's text |
+| `bookIds` | comma-separated numeric book ids |
+| `volumeId`, `chapterId`, `authorId`, `categoryId` | scope filters (numeric ids) |
+| `sort` | `relevance` (default), `canonical` (book, then chapter order), `hits` (most matching passages first; max 1000 results deep) |
+| `page`, `pageSize` | 1-based page of **chapters**; `pageSize` 1-50, default 20 |
+
+Response (not wrapped in `{data}`): `{ query, mode, total, page, pageSize, groups, facets }`.
+- `total` = matching chapters (all pages). `groups` = this page's chapters grouped by book: `{ book:{id,slug,titleEn/Ar/Ur}, chapterCount, hitCount, chapters:[{ chapterId, slug, titleEn/Ar/Ur, volumeSlug, hitCount, snippets:[{ anchorId, lang, html, quote }] }] }`.
+- `snippets` (up to 3 per chapter): `html` is HTML-escaped text with `<mark>…</mark>` around hits and nothing else; `anchorId` is the jump target inside the chapter TEI (link as `/books/<book>/<chapter>#<anchorId>`), null = no anchor. `quote` = `{ q, e: null }`, ~60 chars of text starting at the first matched word. Link as `/books/<book>/<chapter>?q=<q>&b=1`: the reader re-finds that text, scrolls to it and highlights the whole block (paragraph/heading/quote) that contains it (`b=1` clamps the shared-passage highlight to that block; the highlight is re-applied on DOM changes until the reader taps); for long (split) chapters the chapter page picks the part that contains `q` when no `?part` is given.
+- `facets`: `books`, `authors`, `categories` — each `[{ id, count }]` (numeric ids, counts of matching chapters).
+- Errors: 400 (empty/too long/too many words, page too deep, validation), 429 rate limit (`SEARCH_RATE_LIMIT_MAX`, default 60/min — tighter than the global limit because each request fans out to several OpenSearch queries), 503 when OpenSearch is unreachable or the index is not built. Only active chapters of published books are returned.
+- Web side: `apps/web/lib/api/search.ts` maps 400 -> "invalid", anything else -> "unavailable"; never cached.
 
 ### Markdown format (`services/tei-markdown.service.ts`)
 Pure function, TEI fragment -> compact Markdown. Arabic/Urdu text is kept verbatim.

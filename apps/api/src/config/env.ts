@@ -18,6 +18,11 @@ const envSchema = z.object({
   AI_BASE_URL: z.string().url().optional(),
   /** The model's context window in tokens (shown as the "window" in the chat UI). */
   AI_CONTEXT_TOKENS: z.coerce.number().int().positive().default(128000),
+  /** Max /v1/search requests per minute per client. */
+  SEARCH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
+  /** Content search (OpenSearch). The index is derived from MySQL/TEI and can be rebuilt with `pnpm search:reindex`. */
+  SEARCH_URL: z.string().url().default("http://localhost:9200"),
+  SEARCH_INDEX_PREFIX: z.string().min(1).default("sunniwiki"),
   DATABASE_URL: z.string().min(1),
 })
 

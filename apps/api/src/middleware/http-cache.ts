@@ -12,6 +12,7 @@ export const CACHE = {
   list: { maxAge: 300, swr: 600 },
   detail: { maxAge: 300, swr: 600 },
   chapter: { maxAge: 3600, swr: 86400 },
+  search: { maxAge: 60, swr: 300 },
 } as const
 
 /**

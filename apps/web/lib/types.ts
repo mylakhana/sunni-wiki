@@ -1,8 +1,9 @@
 /** UI types shared by server and client components (mapped from the API DTOs in lib/api/mappers.ts). */
-export type Category = { id: string; en: string; ar: string | null; ur: string | null; desc: string | null; bookCount: number }
+export type Category = { id: string; dbId: number; en: string; ar: string | null; ur: string | null; desc: string | null; bookCount: number }
 
 export type Author = {
   id: string // slug
+  dbId: number // numeric API id (search scope filters)
   name: string
   ar: string | null
   ur: string | null
@@ -13,6 +14,7 @@ export type Author = {
 
 export type Book = {
   id: string // slug
+  dbId: number // numeric API id (search scope filters)
   title: string
   ar: string | null
   ur: string | null

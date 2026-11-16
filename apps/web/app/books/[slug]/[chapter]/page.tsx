@@ -4,7 +4,7 @@ import { Suspense } from "react"
 import { ChapterArticle } from "@/components/library/chapter-article"
 import { getBook, getChapter } from "@/lib/api/library"
 import { ChapterStream } from "@/components/library/chapter-stream"
-import { isLongTei, partOfAnchor, TeiContent } from "@/lib/tei/render"
+import { isLongTei, partOfAnchor, partOfText, TeiContent } from "@/lib/tei/render"
 import { titleOf } from "@/lib/types"
 
 type Props = {
@@ -29,10 +29,13 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
 async function ChapterView({ params, searchParams }: Props) {
   const { slug, chapter: chapterSlug } = await params
-  const rawPart = (await searchParams).part
-  const part = Math.max(1, Number.parseInt(Array.isArray(rawPart) ? rawPart[0]! : (rawPart ?? "1"), 10) || 1)
+  const sp = await searchParams
+  const rawPart = sp.part
+  let part = Math.max(1, Number.parseInt(Array.isArray(rawPart) ? rawPart[0]! : (rawPart ?? "1"), 10) || 1)
   const [book, chapter] = await Promise.all([getBook(slug), getChapter(slug, chapterSlug)])
   if (!book || !chapter) notFound()
+  // A search-result / shared-passage link (?q=…) without ?part: open the part of a long chapter that holds the text.
+  if (sp.part === undefined && one(sp.q) && chapter.tei) part = partOfText(chapter.tei, one(sp.q))
 
   // Groups (level 0) and sub-topics (level 2) have no text of their own: send the reader to the chapter that does.
   if (chapter.redirect) {

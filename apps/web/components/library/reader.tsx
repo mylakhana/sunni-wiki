@@ -108,7 +108,7 @@ export function ReaderShell({ book, children }: { book: BookDetail; children: Re
     saveLastRead({ book: book.id, vol: volume?.slug ?? null, ch: chapter.slug, title: chTitle })
     if (byScroll.current) return // reached by scrolling down the stream: keep the position
     const pos = store.get<{ ch?: string; off?: number } | null>(`pos:${book.id}`, null)
-    if (window.location.hash) return // jumping to a sub-topic anchor: handled by the hash effect below
+    if (window.location.hash || new URLSearchParams(window.location.search).has("q")) return // sub-topic anchor (hash effect) or shared/search passage (highlight effect) scrolls itself
     if (pos?.ch === posKey && typeof pos.off === "number") {
       const t = setTimeout(() => window.scrollTo({ top: pos.off }), 100)
       return () => clearTimeout(t)

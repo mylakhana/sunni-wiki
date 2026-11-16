@@ -4,6 +4,7 @@ import authorsRoute from "./authors.js"
 import booksRoute from "./books.js"
 import categoriesRoute from "./categories.js"
 import healthRoute from "./health.js"
+import searchRoute from "./search.js"
 
 export default async function v1Routes(app: FastifyInstance) {
   await app.register(healthRoute)
@@ -11,4 +12,5 @@ export default async function v1Routes(app: FastifyInstance) {
   await app.register(authorsRoute)
   await app.register(booksRoute)
   await app.register(aiRoute)
+  await app.register(searchRoute)
 }

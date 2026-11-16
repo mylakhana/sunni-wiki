@@ -7,7 +7,10 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "format": "turbo format",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "search:up": "brew services start opensearch",
+    "search:down": "brew services stop opensearch",
+    "search:logs": "tail -f $(brew --prefix)/var/log/opensearch/*.log"
   },
   "devDependencies": {
     "@workspace/eslint-config": "workspace:*",

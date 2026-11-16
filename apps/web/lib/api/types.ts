@@ -38,3 +38,17 @@ export type ChapterMarkdownDto = {
 }
 export type ContextUnitDto = { id: number; slug: string; level: 0 | 1 | 2 | 3; markdownChars: number } & TitlesDto
 export type ContextUnitsDto = { units: ContextUnitDto[]; totalChars: number; maxChars: number; maxTokens: number }
+
+/** GET /v1/search (see apps/api/docs/api-structure.md "Search"). Snippet `html` contains only <mark> tags (other text is HTML-escaped). */
+export type SearchSnippetDto = { anchorId: Nullable<string>; lang: string; html: string; quote: Nullable<{ q: string; e: Nullable<string> }> }
+export type SearchChapterHitDto = { chapterId: number; slug: string; volumeSlug: Nullable<string>; hitCount: number; snippets: SearchSnippetDto[] } & TitlesDto
+export type SearchGroupDto = {
+  book: { id: number; slug: string; titleEn: string; titleAr: Nullable<string>; titleUr: Nullable<string> }
+  chapterCount: number; hitCount: number; chapters: SearchChapterHitDto[]
+}
+export type SearchFacetDto = { id: number; count: number }
+export type SearchResponseDto = {
+  query: string; mode: "all" | "any" | "phrase"; total: number; page: number; pageSize: number
+  groups: SearchGroupDto[]
+  facets: { books: SearchFacetDto[]; authors: SearchFacetDto[]; categories: SearchFacetDto[] }
+}

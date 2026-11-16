@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { fuzzyFind } from "@/lib/tei/fuzzy-find"
 
 /** Share a selected passage as a deep link (?part&q[&e]#anchor) that re-highlights the text on load. */
 
@@ -36,13 +37,17 @@ function index(root: Element) {
 }
 const strip = (s: string) => norm(s).split("").filter((c) => !IGNORE.test(c)).join("")
 
-function findRange(root: Element, q: string, e: string | null): Range | null {
+const BLOCK = "p,h1,h2,h3,h4,h5,h6,blockquote,li,td,aside,figure"
+
+/** `block`: the range ends at the end of the block (paragraph, heading, quote…) that contains its start. */
+function findRange(root: Element, q: string, e: string | null, block = false): Range | null {
   const { text, map } = index(root)
   const qs = strip(q)
   if (!qs) return null
-  const a = text.indexOf(qs)
-  if (a < 0) return null
-  let end = a + qs.length
+  const hit = fuzzyFind(text, qs)
+  if (!hit) return null
+  const a = hit[0]
+  let end = hit[1]
   if (e) {
     const es = strip(e)
     const b = text.indexOf(es, end)
@@ -53,6 +58,10 @@ function findRange(root: Element, q: string, e: string | null): Range | null {
   const r = document.createRange()
   r.setStart(s.node, s.off)
   r.setEnd(t.node, t.off + 1)
+  if (block) {
+    const b = s.node.parentElement?.closest(BLOCK)
+    if (b && root.contains(b)) r.setEnd(b, b.childNodes.length)
+  }
   return r
 }
 
@@ -63,21 +72,35 @@ function useSharedHighlight(root: () => Element | null) {
     const q = p.get("q")
     if (!q || typeof CSS === "undefined" || !("highlights" in CSS)) return
     const e = p.get("e")
-    let done = false
+    const block = p.get("b") === "1" // search-result link: highlight the whole paragraph holding the text
+    let scrolled = false
+    let cleared = false
+    // The Range points at text nodes: hydration / lazy parts / streamed chapters can replace them, which silently
+    // drops the highlight. So (re)apply on every DOM change of the chapter until the reader taps, and scroll only once.
     const run = () => {
       const el = root()
-      if (done || !el) return
-      const r = findRange(el, q, e)
+      if (cleared || !el) return
+      const r = findRange(el, q, e, block)
       if (!r) return
-      done = true
       CSS.highlights.set("shared-quote", new Highlight(r))
-      r.startContainer.parentElement?.scrollIntoView({ block: "center", behavior: "smooth" })
+      if (!scrolled) {
+        scrolled = true
+        r.startContainer.parentElement?.scrollIntoView({ block: "center", behavior: "smooth" })
+      }
     }
-    const timers = [0, 400, 1200, 2500].map((ms) => setTimeout(run, ms))
+    const timers = [0, 400, 1200, 2500, 4500].map((ms) => setTimeout(run, ms))
+    let mo: MutationObserver | undefined
+    let debounce: ReturnType<typeof setTimeout> | undefined
+    const watch = setTimeout(() => {
+      const el = root()
+      if (!el || cleared) return
+      mo = new MutationObserver(() => { clearTimeout(debounce); debounce = setTimeout(run, 150) })
+      mo.observe(el, { childList: true, subtree: true, characterData: true })
+    }, 0)
     // any tap/keypress clears the highlight
-    const clear = () => CSS.highlights.delete("shared-quote")
+    const clear = () => { cleared = true; mo?.disconnect(); CSS.highlights.delete("shared-quote") }
     const off = setTimeout(() => addEventListener("pointerdown", clear, { once: true }), 1500)
-    return () => { timers.forEach(clearTimeout); clearTimeout(off); removeEventListener("pointerdown", clear); clear() }
+    return () => { cleared = true; timers.forEach(clearTimeout); clearTimeout(off); clearTimeout(watch); clearTimeout(debounce); mo?.disconnect(); removeEventListener("pointerdown", clear); CSS.highlights.delete("shared-quote") }
   }, [root])
 }
 

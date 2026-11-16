@@ -6,7 +6,7 @@ import { loadSearchIndex } from "@/lib/actions"
 import type { SearchIndex } from "@/lib/types"
 import { authorColor, initials } from "@/lib/ui"
 
-type Item = { key: string; href: string; kind: "author" | "book"; title: string; sub?: string; color?: string; hue?: [string, string] }
+type Item = { key: string; href: string; kind: "author" | "book" | "content"; title: string; sub?: string; color?: string; hue?: [string, string] }
 
 let cached: SearchIndex | null = null
 
@@ -62,8 +62,10 @@ function PaletteInner({ onClose, index }: { onClose: () => void; index: SearchIn
     )
       .slice(0, 8)
       .map((b) => ({ key: `b-${b.id}`, href: `/books/${b.id}`, kind: "book", title: b.title, sub: b.authorName, hue: b.hue }))
-    return [...authors, ...books]
-  }, [term, index])
+    // Always offer the full-text search for what was typed (last row)
+    const content: Item[] = q.trim() ? [{ key: "content", href: `/search?q=${encodeURIComponent(q.trim())}`, kind: "content", title: `Search inside books for “${q.trim()}”`, sub: "Full-text search" }] : []
+    return [...authors, ...books, ...content]
+  }, [term, index, q])
 
   const idx = Math.min(active, Math.max(items.length - 1, 0))
 
@@ -117,7 +119,11 @@ function PaletteInner({ onClose, index }: { onClose: () => void; index: SearchIn
       className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5"
       style={i === idx ? { background: "var(--lib-accent-soft)" } : undefined}
     >
-      {it.kind === "author" ? (
+      {it.kind === "content" ? (
+        <span className="grid h-9 w-9 place-items-center rounded-full" style={{ background: "var(--lib-accent-soft)" }}>
+          <svg aria-hidden="true" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 5h16M4 12h10M4 19h16" /></svg>
+        </span>
+      ) : it.kind === "author" ? (
         <span className="grid h-9 w-9 place-items-center rounded-full text-xs font-semibold text-white" style={{ background: it.color }}>{initials(it.title)}</span>
       ) : (
         <span className="h-11 w-8 shrink-0 rounded-sm" style={{ background: `linear-gradient(145deg,${it.hue![0]},${it.hue![1]})` }} />
@@ -129,6 +135,7 @@ function PaletteInner({ onClose, index }: { onClose: () => void; index: SearchIn
     </div>
   )
   const nAuthors = items.filter((i) => i.kind === "author").length
+  const nBooks = items.filter((i) => i.kind === "book").length
 
   return (
     <div className="fixed inset-0 z-50" onKeyDown={onKeyDown}>
@@ -160,13 +167,25 @@ function PaletteInner({ onClose, index }: { onClose: () => void; index: SearchIn
             <>
               {nAuthors > 0 && <p className={label} aria-hidden="true">Writers</p>}
               {items.slice(0, nAuthors).map((it, i) => renderRow(it, i))}
-              <p className={label} aria-hidden="true">{term ? "Books" : "Popular books"}</p>
-              {items.slice(nAuthors).map((it, i) => renderRow(it, i + nAuthors))}
+              {(nBooks > 0 || !term) && <p className={label} aria-hidden="true">{term ? "Books" : "Popular books"}</p>}
+              {items.slice(nAuthors, nAuthors + nBooks).map((it, i) => renderRow(it, i + nAuthors))}
+              {items.slice(nAuthors + nBooks).map((it, i) => renderRow(it, i + nAuthors + nBooks))}
             </>
           )}
         </div>
-        <div className="bd-line c-muted hidden items-center gap-4 border-t px-5 py-2 text-xs sm:flex" aria-hidden="true">
-          <span>↑↓ navigate</span><span>↵ open</span><span>esc close</span>
+        <div className="bd-line flex items-center justify-between gap-4 border-t px-5 py-2 text-xs">
+          <span className="c-muted hidden items-center gap-4 sm:flex" aria-hidden="true">
+            <span>↑↓ navigate</span><span>↵ open</span><span>esc close</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => go({ key: "content-btn", href: q.trim() ? `/search?q=${encodeURIComponent(q.trim())}` : "/search", kind: "content", title: "" })}
+            className="ml-auto inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium"
+            style={{ background: "var(--lib-accent-soft)" }}
+          >
+            <svg aria-hidden="true" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 5h16M4 12h10M4 19h16" /></svg>
+            Search in content
+          </button>
         </div>
       </div>
     </div>

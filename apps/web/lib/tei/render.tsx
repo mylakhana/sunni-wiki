@@ -1,3 +1,4 @@
+import { fuzzyFind } from "@/lib/tei/fuzzy-find"
 import { XMLParser } from "fast-xml-parser"
 import { LazyParts } from "@/components/library/lazy-parts"
 import type { ReactNode } from "react"
@@ -217,6 +218,49 @@ export function partOfAnchor(tei: string, id: string): number {
     const tree = (parser.parse(tei) as XNode[]).filter((n) => tagOf(n) !== "?xml")
     const pos = anchorOffset(tree, id, { pos: 0 })
     return pos == null ? 1 : Math.floor(pos / PART_BUDGET) + 1
+  } catch {
+    return 1
+  }
+}
+
+// Harakat / Quranic marks / tatweel / zero-width chars are ignored when matching (same set as share-selection.tsx).
+const IGNORE_RE = /[ـً-ٰٟۖ-ۭ​-‏]/g
+const matchForm = (s: string) => s.replace(IGNORE_RE, "").replace(/\s+/g, " ").trim()
+
+/**
+ * 1-based part of a (possibly split) chapter whose text contains `q` (the start of a passage, as in `?q=` links);
+ * 1 when short or not found. Text is compared diacritic-insensitively across leaf blocks.
+ */
+export function partOfText(tei: string, q: string): number {
+  if (!isLongTei(tei)) return 1
+  const want = matchForm(q)
+  if (!want) return 1
+  try {
+    const tree = (parser.parse(tei) as XNode[]).filter((n) => tagOf(n) !== "?xml")
+    let all = ""
+    const starts: { at: number; pos: number }[] = []
+    const cursor = { pos: 0 }
+    const walk = (nodes: XNode[]) => {
+      for (const n of nodes) {
+        const t = tagOf(n)
+        if (t && CONTAINERS.has(t)) walk(kids(n, t))
+        else {
+          starts.push({ at: all.length, pos: cursor.pos })
+          all += matchForm(plain([n])) + " "
+          cursor.pos += textWeight(n)
+        }
+      }
+    }
+    walk(tree)
+    const hit = fuzzyFind(all, want)
+    if (!hit) return 1
+    const idx = hit[0]
+    let pos = 0
+    for (const s of starts) {
+      if (s.at > idx) break
+      pos = s.pos
+    }
+    return Math.floor(pos / PART_BUDGET) + 1
   } catch {
     return 1
   }

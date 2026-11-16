@@ -105,7 +105,7 @@ def find_candidates(rows: list[dict]) -> list[int]:
 _GROUP_TITLE = re.compile(r"^(کتاب|باب)\b")  # "کتاب الطہارۃ", "باب الوضوء" (not "بابت …", "کتابت …")
 
 
-_BOOKLET_TITLE = re.compile(r"^رسال[ہۃة]\b")  # "رسالہ تجلی الیقین …"
+_BOOKLET_TITLE = re.compile(r"^ر\s?س\s?ا\s?ل\s?[ہۃة]\b")  # "رسالہ تجلی الیقین …" (vol 28 has stray spaces: "رسا لہ …")
 
 
 def is_booklet_title(node: dict) -> bool:
